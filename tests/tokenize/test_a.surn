@@ -1,0 +1,23 @@
+namespace Test;
+class Test {
+    pub x: string;
+
+    pub construct() {
+        this.x = "hello";
+    }
+
+    pub fn print(): void {
+        print('${this.x}, world!');
+    }
+
+    pub static fn write(value: string): Self {
+        var self = new Self();
+        self.x = value;
+        return self;
+    }
+}
+
+fn main() {
+    var test = new Test();
+    test.print();
+}
