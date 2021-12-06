@@ -1,7 +1,8 @@
 ## Example
 ```
 namespace Test;
-import { Test, Test2 } from "namespace";
+use std::io;
+use pocketmine::world::World;
 
 var test = new Test();
 

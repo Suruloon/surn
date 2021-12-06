@@ -1,3 +1,5 @@
+use crate::{lexer::keyword::KeyWord, types::TypeRef};
+
 // Expressions {{
 
 /// An expression is any thing that can be evaluated to a value.
@@ -17,19 +19,14 @@ pub enum Expression {
     /// - `"hello"`
     /// - `true`
     /// - `false`
-    Literal(Literal),
-    /// A macro invocation.
-    /// For example:
-    /// - `php!( "hello" )`
-    /// - `php! { public function foo() { return "hello"; } }`
-    MacroInvocation(CompilerMacro),
+    Literal(Literal)
 }
 
 #[derive(Debug, Clone)]
 pub struct Literal {
     pub value: String,
     /// The type of the literal assumed by the compiler
-    pub type_id: Option<u64>,
+    pub type_node: Option<TypeRef>,
 }
 // }}
 
@@ -53,28 +50,138 @@ pub enum Statement {
     Class(Class),
     /// A block statment
     Block(Vec<Expression>),
+    /// A import statement.
+    /// For example:
+    /// - `use foo;`
+    /// - `use foo::bar;`
+    /// - `use foo::bar::baz;`
+    /// - `use foo::bar as baz;`
+    /// - `use foo::bar::{ baz, bat };`
+    Import(Path),
+    /// A type statement / alias.
+    /// For example:
+    /// - `type Foo = int;`
+    /// - `type Foo = Bar;`
+    Type(TypeRef),
+    /// A macro invocation.
+    /// For example:
+    /// - `php!( "hello" )`
+    /// - `php! { public function foo() { return "hello"; } }`
+    MacroInvocation(CompilerMacro),
+}
+
+impl Statement {
+    pub fn is_block(&self) -> bool {
+        match self {
+            Statement::Block(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_function(&self) -> bool {
+        match self {
+            Statement::Function(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_class(&self) -> bool {
+        match self {
+            Statement::Class(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_import(&self) -> bool {
+        match self {
+            Statement::Import(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_type(&self) -> bool {
+        match self {
+            Statement::Type(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_macro_invocation(&self) -> bool {
+        match self {
+            Statement::MacroInvocation(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_mutable(&self) -> bool {
+        match self {
+            Statement::Mutable(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_immutable(&self) -> bool {
+        match self {
+            Statement::Immutable(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum Visibility {
+    /// Public visibility. Every module can see this.
     Public,
+    /// Private visibility. Only the current **scope** can see this.
     Private,
-    Protected
+    /// Protected, only the current **scope** and its children can see this.
+    Protected,
+    /// Internal visibility. Only the current **module** can see this.
+    /// This is the default visibility.
+    /// This is not userdefined.
+    Module
+}
+
+impl Visibility {
+    pub fn from_keyword(keyword: KeyWord) -> Self {
+        match keyword {
+            KeyWord::Public => Visibility::Public,
+            KeyWord::Private => Visibility::Private,
+            KeyWord::Protected => Visibility::Protected,
+            _ => Visibility::Private
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Class {
     pub name: String,
     pub extends: Option<String>,
+    pub properties: Vec<ClassProperty>,
+    /// These are static properties.
+    pub external: Vec<ClassProperty>,
     pub body: Vec<Statement>,
+    pub node_id: u64
+}
+
+impl Class {
+    pub fn new(visibility: Visibility) -> Self {
+        Class {
+            name: String::new(),
+            extends: None,
+            body: Vec::new(),
+            node_id: 0,
+            properties: Vec::new()
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct ClassProperty {
     pub name: String,
     pub visibility: Visibility,
-    pub type_id: u64,
-    pub value: Option<Expression>,
+    pub type_ref: TypeRef,
+    pub value: Option<Statement>,
 }
 
 pub enum ClassBody {
@@ -95,21 +202,36 @@ pub struct Function {
 #[derive(Debug, Clone)]
 pub struct FunctionInput {
     pub name: String,
-    pub type_id: u64,
+    pub type_ref: TypeRef,
 }
 
 #[derive(Debug, Clone)]
 pub struct Variable {
     pub name: String,
     pub node_id: u64,
-    pub type_id: u64,
-    pub assignment: Option<Expression>,
+    pub type_ref: TypeRef,
+    pub visibility: Visibility,
+    pub assignment: Option<Box<Statement>>,
 }
 
 impl Variable {
     pub fn is_uninit(&self) -> bool {
         self.assignment.is_none()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Path {
+    /// The module to import.
+    /// For example:
+    /// - `foo`
+    /// - `std` in `std::io` etc.
+    pub name: String,
+    /// The parts of the import
+    /// For example:
+    /// - `foo` in `bar::foo`
+    /// - `bar, baz` in `foo::{bar, baz}`
+    pub parts: Vec<Path>
 }
 
 // Macros {{

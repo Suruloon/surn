@@ -2,6 +2,7 @@ pub mod ast;
 pub mod lexer;
 pub mod parser;
 pub mod report;
+pub mod types;
 pub mod util;
 
 pub const CURRENT_VERSION: &'static str = "0.0.1-alpha.rc.1";
@@ -25,6 +26,12 @@ pub struct CompilerOptions {
     /// Whether or not to dump the ast to a `surn-ast.bin` file
     /// in the projects current working directory.
     pub dump_ast: bool,
+    /// Whether or not to perform after-parse semantic checks.
+    /// This is a post-parse check that checks for things like:
+    /// - Unused variables
+    /// - Unused functions
+    /// - Runtime error prevention
+    pub post_semantic_checks: bool,
     /// Whether or not to stop compiling after the ast is complete.
     /// This is useful for debugging / testing.
     pub ast_only: bool,
@@ -40,6 +47,7 @@ impl CompilerOptions {
             semantic_checks: true,
             optimize: true,
             dump_ast: false,
+            post_semantic_checks: true,
             ast_only: false,
             detect_bleeding_declarations: false,
         }
@@ -51,6 +59,7 @@ impl CompilerOptions {
             semantic_checks: true,
             optimize: true,
             dump_ast: true,
+            post_semantic_checks: false,
             ast_only: false,
             detect_bleeding_declarations: false,
         }

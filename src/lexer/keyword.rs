@@ -63,4 +63,25 @@ impl KeyWord {
             KeyWord::Protected => "prot".to_string(),
         }
     }
+
+    pub fn is_visibility(&self) -> bool {
+        match self {
+            KeyWord::Public | KeyWord::Private | KeyWord::Protected => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_declarative(&self) -> bool {
+        match self {
+            KeyWord::Var | KeyWord::Const | KeyWord::Function | KeyWord::Class | KeyWord::Interface => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_control(&self) -> bool {
+        match self {
+            KeyWord::If | KeyWord::Else => true,
+            _ => false,
+        }
+    }
 }

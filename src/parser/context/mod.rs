@@ -124,7 +124,8 @@ impl SourceOrigin {
 /// This is used to resolve symbols.
 pub struct ContextStore {
     contexts: HashMap<u64, Context>,
-    globals: Vec<Statement>,
+    /// Ids that provide the location of the global variables.
+    globals: Vec<u64>,
     id: u64,
 }
 
@@ -149,7 +150,11 @@ impl ContextStore {
         return self.contexts.get(&self.id).unwrap();
     }
 
-    pub fn get_globals(&self) -> &Vec<Statement> {
+    pub fn next_context_id(&self) -> u64 {
+        self.id + 1
+    }
+
+    pub fn get_globals(&self) -> &Vec<u64> {
         &self.globals
     }
 }
@@ -159,6 +164,7 @@ pub struct Context {
     pub source: Option<SourceOrigin>,
     pub body: AstBody,
     origin: u64,
+    local_id: u64,
 }
 
 impl Context {
@@ -167,6 +173,12 @@ impl Context {
             source: Some(source),
             body: AstBody::new(),
             origin: id,
+            local_id: 0
         }
+    }
+
+    pub fn get_next_local_id(&mut self) -> u64 {
+        self.local_id += 1;
+        return self.local_id;
     }
 }
