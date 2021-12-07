@@ -21,7 +21,12 @@ impl Cursor<'_> {
         let start_pos = self.get_pos();
 
         if let Some(operator) = self.eat_operator() {
-            return token!(start_pos, self.get_pos(), TokenType::Operator, Some(operator));
+            return token!(
+                start_pos,
+                self.get_pos(),
+                TokenType::Operator,
+                Some(operator)
+            );
         }
 
         if let Some(keyword) = self.eat_keyword() {
@@ -33,7 +38,12 @@ impl Cursor<'_> {
         }
 
         if let Some(identifier) = self.eat_identifier() {
-            return token!(start_pos, self.get_pos(), TokenType::Identifier, Some(identifier));
+            return token!(
+                start_pos,
+                self.get_pos(),
+                TokenType::Identifier,
+                Some(identifier)
+            );
         }
         if let Some(number) = self.eat_number() {
             return token!(start_pos, self.get_pos(), TokenType::Number, Some(number));
@@ -94,7 +104,7 @@ impl Cursor<'_> {
             '+' | '-' | '*' | '/' | '%' | '=' | '<' | '>' | '&' | '|' | '^' | '~' => {
                 self.peek();
                 Some(self.get_prev().to_string())
-            },
+            }
             'o' => {
                 if self.nth_char(1) == 'r' {
                     self.peek_inc(2);
@@ -102,7 +112,7 @@ impl Cursor<'_> {
                 } else {
                     None
                 }
-            },
+            }
             'a' => {
                 if self.nth_char(1) == 'n' && self.nth_char(2) == 'd' {
                     self.peek_inc(3);
@@ -110,7 +120,7 @@ impl Cursor<'_> {
                 } else {
                     return None;
                 }
-            },
+            }
             _ => None,
         }
     }

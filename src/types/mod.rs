@@ -4,7 +4,7 @@ use crate::ast::Expression;
 pub enum TypeKind {
     BuiltIn(BuiltInType),
     Ref(TypeRef),
-    Other(Type)
+    Other(TypeRef),
 }
 
 #[derive(Debug, Clone)]
@@ -13,14 +13,14 @@ pub enum BuiltInType {
     Float,
     Bool,
     String,
-    Array(Type),
-    Map(Box<Type>, Box<Type>),
+    Array(Box<TypeKind>),
+    Map(Box<TypeKind>, Box<TypeKind>),
 }
 
 #[derive(Debug, Clone)]
 pub struct TypeRef {
     pub context: u64,
-    pub node: u64
+    pub node: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -30,7 +30,7 @@ pub struct Type {
     /// The evaluation of the type.
     /// If this is a function, it will be used to validate declarations that use this type.
     /// It is important to note that if a function is used, it must return a boolean.
-    pub expression: Expression,
+    pub kind: TypeKind,
     /// The id of the type.
     pub id: u64,
 }

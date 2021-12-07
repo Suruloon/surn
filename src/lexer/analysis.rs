@@ -1,9 +1,6 @@
 use crate::util::{StreamBuffer, TokenStream};
 
-use super::{
-    token::Token,
-    tokenizer::tokenize,
-};
+use super::{token::Token, tokenizer::tokenize};
 
 pub struct Analyzer {
     pub stream: TokenStream,

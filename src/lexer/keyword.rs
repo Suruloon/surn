@@ -73,7 +73,11 @@ impl KeyWord {
 
     pub fn is_declarative(&self) -> bool {
         match self {
-            KeyWord::Var | KeyWord::Const | KeyWord::Function | KeyWord::Class | KeyWord::Interface => true,
+            KeyWord::Var
+            | KeyWord::Const
+            | KeyWord::Function
+            | KeyWord::Class
+            | KeyWord::Interface => true,
             _ => false,
         }
     }

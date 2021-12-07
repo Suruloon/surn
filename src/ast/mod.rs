@@ -19,7 +19,7 @@ pub enum Expression {
     /// - `"hello"`
     /// - `true`
     /// - `false`
-    Literal(Literal)
+    Literal(Literal),
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +44,8 @@ pub enum Statement {
     Mutable(Variable),
     /// A const statement.
     Immutable(Variable),
+    /// A static statement.
+    Static(Box<Statement>),
     /// A function declaration.
     Function(Function),
     /// A class declaration.
@@ -71,16 +73,72 @@ pub enum Statement {
 }
 
 impl Statement {
-    pub fn is_block(&self) -> bool {
+    pub fn get_block(&self) -> Option<Vec<Expression>> {
         match self {
-            Statement::Block(_) => true,
-            _ => false,
+            Statement::Block(v) => Some(v.clone()),
+            _ => None,
         }
     }
 
-    pub fn is_function(&self) -> bool {
+    pub fn get_type(&self) -> Option<TypeRef> {
         match self {
-            Statement::Function(_) => true,
+            Statement::Type(t) => Some(t.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_function(&self) -> Option<Function> {
+        match self {
+            Statement::Function(f) => Some(f.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_class(&self) -> Option<Class> {
+        match self {
+            Statement::Class(c) => Some(c.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_import(&self) -> Option<Path> {
+        match self {
+            Statement::Import(p) => Some(p.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_macro_invocation(&self) -> Option<CompilerMacro> {
+        match self {
+            Statement::MacroInvocation(m) => Some(m.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_mutable(&self) -> Option<Variable> {
+        match self {
+            Statement::Mutable(v) => Some(v.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_immutable(&self) -> Option<Variable> {
+        match self {
+            Statement::Immutable(v) => Some(v.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_static(&self) -> Option<Box<Statement>> {
+        match self {
+            Statement::Static(s) => Some(s.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn is_block(&self) -> bool {
+        match self {
+            Statement::Block(_) => true,
             _ => false,
         }
     }
@@ -92,16 +150,16 @@ impl Statement {
         }
     }
 
-    pub fn is_import(&self) -> bool {
+    pub fn is_function(&self) -> bool {
         match self {
-            Statement::Import(_) => true,
+            Statement::Function(_) => true,
             _ => false,
         }
     }
 
-    pub fn is_type(&self) -> bool {
+    pub fn is_import(&self) -> bool {
         match self {
-            Statement::Type(_) => true,
+            Statement::Import(_) => true,
             _ => false,
         }
     }
@@ -126,6 +184,20 @@ impl Statement {
             _ => false,
         }
     }
+
+    pub fn is_type(&self) -> bool {
+        match self {
+            Statement::Type(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_static(&self) -> bool {
+        match self {
+            Statement::Static(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -139,7 +211,7 @@ pub enum Visibility {
     /// Internal visibility. Only the current **module** can see this.
     /// This is the default visibility.
     /// This is not userdefined.
-    Module
+    Module,
 }
 
 impl Visibility {
@@ -148,7 +220,7 @@ impl Visibility {
             KeyWord::Public => Visibility::Public,
             KeyWord::Private => Visibility::Private,
             KeyWord::Protected => Visibility::Protected,
-            _ => Visibility::Private
+            _ => Visibility::Private,
         }
     }
 }
@@ -161,7 +233,7 @@ pub struct Class {
     /// These are static properties.
     pub external: Vec<ClassProperty>,
     pub body: Vec<Statement>,
-    pub node_id: u64
+    pub node_id: u64,
 }
 
 impl Class {
@@ -171,7 +243,8 @@ impl Class {
             extends: None,
             body: Vec::new(),
             node_id: 0,
-            properties: Vec::new()
+            properties: Vec::new(),
+            external: Vec::new(),
         }
     }
 }
@@ -181,12 +254,10 @@ pub struct ClassProperty {
     pub name: String,
     pub visibility: Visibility,
     pub type_ref: TypeRef,
-    pub value: Option<Statement>,
+    pub value: Option<Expression>,
 }
 
-pub enum ClassBody {
-    
-}
+pub enum ClassBody {}
 
 /// A function call or method call.
 #[derive(Debug, Clone)]
@@ -211,12 +282,21 @@ pub struct Variable {
     pub node_id: u64,
     pub type_ref: TypeRef,
     pub visibility: Visibility,
-    pub assignment: Option<Box<Statement>>,
+    pub assignment: Option<Expression>,
 }
 
 impl Variable {
     pub fn is_uninit(&self) -> bool {
         self.assignment.is_none()
+    }
+
+    pub fn to_class_property(&self) -> ClassProperty {
+        ClassProperty {
+            name: self.name.clone(),
+            visibility: self.visibility.clone(),
+            type_ref: self.type_ref.clone(),
+            value: self.assignment.clone(),
+        }
     }
 }
 
@@ -231,7 +311,7 @@ pub struct Path {
     /// For example:
     /// - `foo` in `bar::foo`
     /// - `bar, baz` in `foo::{bar, baz}`
-    pub parts: Vec<Path>
+    pub parts: Vec<Path>,
 }
 
 // Macros {{

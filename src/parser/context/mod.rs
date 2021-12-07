@@ -2,6 +2,18 @@ use std::{collections::HashMap, fs::OpenOptions, io::Read, path::PathBuf};
 
 use crate::ast::{AstBody, Statement};
 
+#[derive(Debug, Clone, PartialEq)]
+#[repr(u8)]
+pub enum ContextFlag {
+    None = 0,
+    InClass,
+    InFunction,
+    InLoop,
+    InIf,
+    InElse,
+    EndOfFile,
+}
+
 /// Contains a map to the actual source for any context.
 /// The contents of the source file are not kept in memory, but rather
 /// their locations.
@@ -163,6 +175,7 @@ impl ContextStore {
 pub struct Context {
     pub source: Option<SourceOrigin>,
     pub body: AstBody,
+    pub(crate) flags: ContextFlag,
     origin: u64,
     local_id: u64,
 }
@@ -172,8 +185,9 @@ impl Context {
         Self {
             source: Some(source),
             body: AstBody::new(),
+            flags: ContextFlag::None,
             origin: id,
-            local_id: 0
+            local_id: 0,
         }
     }
 

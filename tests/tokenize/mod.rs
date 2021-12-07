@@ -25,7 +25,5 @@ pub fn test_token_comparison() {
     assert_ne!(TokenType::LeftBrace, TokenType::RightBrace);
 }
 
-
 #[test]
-pub fn apple() {
-}
+pub fn apple() {}
