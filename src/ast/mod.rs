@@ -266,6 +266,12 @@ pub struct Function {
     pub name: String,
     /// The arguments to the function.
     pub inputs: Vec<FunctionInput>,
+    /// The body of the function,
+    pub body: Vec<Statement>,
+    /// The return types of the function,
+    pub outputs: Vec<TypeRef>,
+    /// The visibilty of the function.
+    pub visibility: Visibility,
     /// The id for the given function.
     pub node_id: u64,
 }

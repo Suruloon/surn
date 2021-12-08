@@ -1,5 +1,5 @@
 use crate::{
-    ast::{AstBody, Class, ClassProperty, Statement, Variable, Visibility},
+    ast::{AstBody, Class, ClassProperty, Statement, Variable, Visibility, Function},
     lexer::{
         analysis::analyze,
         keyword::KeyWord,
@@ -57,7 +57,8 @@ impl AstGenerator {
         }
 
         // we don't know what this is!
-        self.error(format!(
+        dbg!(self.body.clone());
+        panic!("{}", format!(
             "Unexpected token: {}",
             self.tokens.first().unwrap().value().unwrap()
         ));
@@ -85,7 +86,7 @@ impl AstGenerator {
                     // we can't parse this statement
                     // this is an error.
                     if !self.tokens.first().unwrap().kind().is_keyword() {
-                        self.error("Expected a declaration keyword after visibility keyword, but found something different.".to_string());
+                        panic!("{}", "Expected a declaration keyword after visibility keyword, but found something different.".to_string());
                     }
 
                     // we can proceed to check the keyword
@@ -94,7 +95,7 @@ impl AstGenerator {
                             .unwrap();
 
                     if !declaration_keyword.is_declarative() {
-                        self.error(
+                        panic!("{}", 
                             "Expected a declaration keyword after visibility keyword.".to_string(),
                         );
                     }
@@ -107,6 +108,9 @@ impl AstGenerator {
             _ => None,
         };
     }
+
+    // fn parse_function(&mut self, visibility: Visibility) -> Option<Statement> {
+    // }
 
     /// Parses a **Global** declaration.
     /// This is a declaration that is not attached to a class.
@@ -123,7 +127,7 @@ impl AstGenerator {
                 let name = self.tokens.peek().unwrap();
 
                 if !name.kind().is_identifier() {
-                    self.error("Expected a class name after class keyword.".to_string());
+                    panic!("{}", "Expected a class name after class keyword.".to_string());
                 }
 
                 // we know the class name now
@@ -147,7 +151,7 @@ impl AstGenerator {
                 let name = self.tokens.peek().unwrap();
 
                 if !name.kind().is_identifier() {
-                    self.error("Expected a variable name after const keyword.".to_string());
+                    panic!("{}", "Expected a variable name after const keyword.".to_string());
                 }
 
                 // we know the variable name now
@@ -189,7 +193,7 @@ impl AstGenerator {
         let name = self.tokens.peek().unwrap();
 
         if !name.kind().is_identifier() {
-            self.error("Expected a variable name.".to_string());
+            panic!("{}", "Expected a variable name.".to_string());
         }
 
         // we know the variable name now
@@ -219,13 +223,41 @@ impl AstGenerator {
         };
     }
 
+    fn parse_class_method(&mut self, visibility: Visibility) -> Statement {
+        // function statement lulz
+        let name = self.tokens.peek().unwrap();
+
+        dbg!(&name);
+
+        if !name.kind().is_identifier() {
+            panic!("{}", "Expected a method name.".to_string());
+        }
+
+        // we know the method name now
+        let method_name = name.value().unwrap().to_string();
+        // we need to assign this method a new id!
+        let method_id = self.context.get_next_local_id();
+
+        // get the scope for the method
+        let scope = self.parse_scope();
+
+        Statement::Function(Function {
+            name: method_name,
+            node_id: method_id,
+            body: scope,
+            visibility: visibility,
+            inputs: vec![],
+            outputs: vec![],
+        })
+    }
+
     fn parse_class_body(&mut self, class: &mut Class) -> Vec<Statement> {
         // we're expecting the next token to be a brace.
         // if it's not, we can't parse this class as it's not a body.
         let next = self.tokens.peek().unwrap();
 
         if !next.kind().is_left_brace() {
-            self.error("Expected a brace after class name, this opens a class body.".to_string());
+            panic!("{}", "Expected a brace after class name, this opens a class body.".to_string());
         }
 
         let mut statements: Vec<Statement> = Vec::new();
@@ -233,7 +265,7 @@ impl AstGenerator {
         // now we can parse any statement until we reach the end of the class body
         // this is the only special case where we need to specially parse a body or block of code
         // because of how php works :rage:
-        while !self.tokens.first().unwrap().kind().is_right_brace() || !self.tokens.is_eof() {
+        while !self.tokens.first().unwrap().kind().is_right_brace() && !self.tokens.is_eof() {
             let next_token = self.tokens.first().unwrap();
             let statement: Statement = match next_token.kind() {
                 TokenType::KeyWord => {
@@ -247,7 +279,7 @@ impl AstGenerator {
                             self.parse_declaration(Visibility::Private, keyword)
                                 .unwrap()
                         } else {
-                            self.error("This keyword is useless in this context.".to_string());
+                            panic!("{}", "This keyword is useless in this context.".to_string());
                             // this is unreachable, but whatever.
                             continue;
                         }
@@ -256,10 +288,36 @@ impl AstGenerator {
                         // however, lets consume the visibility keyword token from the stream.
                         self.tokens.peek();
 
-                        let property = self.parse_class_property(Visibility::from_keyword(keyword));
+                        let next_token = self.tokens.first().unwrap();
 
-                        class.properties.push(property);
-                        continue;
+                        // check if the next token is a function keyword or not
+                        if next_token.kind().is_keyword() {
+                            if KeyWord::Function == KeyWord::from_string(&next_token.value().unwrap()).unwrap() {
+                                // this a class method!
+                                self.tokens.peek();
+                                self.parse_class_method(Visibility::from_keyword(keyword))
+                            } else if keyword.is_declarative() {
+                                self.tokens.peek();
+                                // check what kind of declaration it is
+                                // if its immutable, we can parse it, if it's not, we can't 😔
+                                if keyword == KeyWord::Const {
+                                    self.parse_declaration(Visibility::Private, keyword)
+                                        .unwrap()
+                                } else {
+                                    panic!("{}", "This keyword is useless in this context.".to_string());
+                                    // this is unreachable, but whatever.
+                                    continue;
+                                }
+                            } else {
+                                panic!("{}", "Expected a variable or function name after visibility keyword.".to_string());
+                                continue;
+                            }
+                        } else {
+                            let property = self.parse_class_property(Visibility::from_keyword(keyword));
+
+                            class.properties.push(property);
+                            continue;
+                        }
                     } else {
                         self.tokens.peek().unwrap();
                         continue;
@@ -276,24 +334,46 @@ impl AstGenerator {
         }
 
         if self.tokens.is_eof() {
-            self.error("This class is never closed.".to_string());
+            panic!("{}", "This class is never closed.".to_string());
         }
 
         // this should never happen, but in the event it does,
         if !self.tokens.first().unwrap().kind().is_right_brace() {
-            self.error("Expected a brace to close the class body.".to_string());
+            panic!("{}", "Expected a brace to close the class body.".to_string());
         }
 
         self.tokens.peek();
         return statements;
     }
 
-    fn parse_keyword() -> Option<Statement> {
-        None
+    fn parse_scope(&mut self) -> Vec<Statement> {
+        // we're expecting the next token to be a brace.
+        let tk = self.tokens.peek().unwrap();
+        let mut statements: Vec<Statement> = Vec::new();
+
+        dbg!(&tk);
+
+        if tk.kind().is_left_brace() {
+            // this is a bit hacky, but bare with me.
+            // we are going to parse a statement until we find a right brace.
+            while !self.tokens.first().unwrap().kind().is_right_brace() && !self.tokens.is_eof() {
+                if let Some(stmt) = self.parse_statement() {
+                    statements.push(stmt);
+                }
+            }
+
+            if self.tokens.is_eof() || !self.tokens.first().unwrap().kind().is_right_brace() {
+                panic!("{}", "Unexected end of scope.".to_string());
+            }
+
+            return statements;
+        } else {
+            panic!("{}", "Expected a brace in this context, this opens a block of code.".to_string());
+        }
     }
 
-    fn error(&self, reason: String) {
-        panic!("{}", reason);
+    fn parse_keyword() -> Option<Statement> {
+        None
     }
 }
 
