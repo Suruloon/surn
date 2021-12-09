@@ -1,0 +1,11 @@
+project:
+  name: Surn-Test
+  author: John
+
+libraries:
+  # Any library that is coded in this language or php should be listed here.
+  # As libraries listed here will provide their own intellisense.
+  pocketmine:
+    source: https://github.com/pmmp/PocketMine-MP
+    includes:
+      - src

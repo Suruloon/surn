@@ -159,7 +159,7 @@ impl Cursor<'_> {
             ')' => Some(TokenType::RightParenthesis),
             '{' => Some(TokenType::LeftBrace),
             '}' => Some(TokenType::RightBrace),
-            ':' => Some(TokenType::Assignment),
+            ':' => Some(TokenType::Colon),
             ';' => Some(TokenType::StatementEnd),
             ',' => Some(TokenType::Comma),
             _ => None,

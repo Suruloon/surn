@@ -1,6 +1,9 @@
 use std::{collections::HashMap, fs::OpenOptions, io::Read, path::PathBuf};
 
-use crate::ast::{AstBody, Statement};
+use crate::{
+    ast::{AstBody, Statement},
+    types::TypeStore,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 #[repr(u8)]
@@ -176,7 +179,8 @@ pub struct Context {
     pub source: Option<SourceOrigin>,
     pub body: AstBody,
     pub(crate) flags: ContextFlag,
-    origin: u64,
+    pub(crate) types: TypeStore,
+    pub(crate) origin: u64,
     local_id: u64,
 }
 
@@ -186,6 +190,7 @@ impl Context {
             source: Some(source),
             body: AstBody::new(),
             flags: ContextFlag::None,
+            types: TypeStore::new(Some(id)),
             origin: id,
             local_id: 0,
         }

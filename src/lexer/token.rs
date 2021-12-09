@@ -13,7 +13,7 @@ pub enum TokenType {
     // The operator token that is used to assign a value to a variable.
     // For example:
     // - `:`
-    Assignment,
+    Colon,
     /// Any characters that follow `#` or `//`.
     ///
     /// For example:
@@ -89,6 +89,13 @@ pub enum TokenType {
 }
 
 impl TokenType {
+    pub fn is_colon(&self) -> bool {
+        match self {
+            TokenType::Colon => true,
+            _ => false,
+        }
+    }
+
     pub fn is_keyword(&self) -> bool {
         match self {
             TokenType::KeyWord => true,
@@ -161,7 +168,7 @@ impl TokenType {
 
     pub fn is_assignment(&self) -> bool {
         match self {
-            TokenType::Assignment => true,
+            TokenType::Colon => true,
             _ => false,
         }
     }

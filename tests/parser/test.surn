@@ -9,7 +9,7 @@ class Test {
         print('${this.x}, world!');
     }
 
-    pub static fn write(value: string): Self {
+    pub fn write(value): Self {
         var self = new Self();
         self.x = value;
         return self;

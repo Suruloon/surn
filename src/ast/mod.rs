@@ -279,7 +279,7 @@ pub struct Function {
 #[derive(Debug, Clone)]
 pub struct FunctionInput {
     pub name: String,
-    pub type_ref: TypeRef,
+    pub types: Vec<TypeRef>,
 }
 
 #[derive(Debug, Clone)]
