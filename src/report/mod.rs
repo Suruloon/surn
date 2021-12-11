@@ -43,3 +43,11 @@ impl Report {
         self
     }
 }
+
+pub struct Charset {
+    pub bar: char,
+    pub pipe: char,
+    pub space: char,
+    pub underline: char,
+    
+}

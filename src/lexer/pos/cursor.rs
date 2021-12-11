@@ -1,5 +1,4 @@
-use super::Position;
-use std::str::Chars;
+use std::{str::Chars, ops::Range};
 
 pub const END_OF_FILE: char = '\0';
 
@@ -8,7 +7,8 @@ pub struct Cursor<'a> {
     ilen: usize,
     chars: Chars<'a>,
     prev: char,
-    pos: Position,
+    /// the current index in the chars buffer.
+    index: usize,
 }
 
 impl<'a> Cursor<'a> {
@@ -17,7 +17,7 @@ impl<'a> Cursor<'a> {
             ilen: input.len(),
             chars: input.chars(),
             prev: END_OF_FILE,
-            pos: Position::new(1, 0),
+            index: 0,
         }
     }
 
@@ -26,16 +26,11 @@ impl<'a> Cursor<'a> {
             Some(c) => {
                 self.prev = c;
 
-                if is_line_ending(c) && self.is_eof() {
+                if self.is_eof() {
                     return None;
                 }
 
-                if is_line_ending(c) {
-                    self.pos.line += 1;
-                    self.pos.column = 0;
-                } else {
-                    self.pos.column += 1;
-                }
+                self.index += 1;
 
                 Some(c)
             }
@@ -73,22 +68,22 @@ impl<'a> Cursor<'a> {
         self.chars.clone()
     }
 
-    pub fn get_pos(&self) -> Position {
-        self.pos.clone()
+    pub fn get_pos(&self) -> usize {
+        self.index.clone()
     }
 
     pub fn get_prev(&self) -> char {
         self.prev.clone()
     }
 
-    pub fn peek_get_pos(&mut self) -> Position {
+    pub fn peek_get_pos(&mut self) -> usize {
         self.peek();
-        self.pos.clone()
+        self.index.clone()
     }
 
-    pub fn ipeek_get_pos(&mut self, x: usize) -> Position {
+    pub fn ipeek_get_pos(&mut self, x: usize) -> usize {
         self.peek_inc(x);
-        self.pos.clone()
+        self.index.clone()
     }
 
     /// Increments the current buffer with the given one.

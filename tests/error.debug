@@ -1,0 +1,19 @@
+Error! Parsing failed, log dumped.
+---- [test-error.surn]
+   |
+2  | var test = fn x() {
+   |            ~~~~~~~~
+E1 | --> This declaration is ambigious in this context.
+   |     You should use function names instead.
+   |
+5  | apple = 10;
+   |       ~~~~~ Cannot assign 10 to apple.
+E2 | --> Apple is under a constant expression.
+
+Error(E2): Constant assignment defined on line 4
+---- [test-error.surn]
+4  | const apple: int = 10;
+   | ~~~~~~~~~~~
+   | ---> Change this to "var" for mutability.
+
+   

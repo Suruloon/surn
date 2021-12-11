@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use super::{keyword::KeyWord, pos::Region};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -224,7 +226,7 @@ impl TokenType {
 }
 
 #[derive(Debug, Clone)]
-pub struct Token(pub TokenType, pub Region, pub Option<String>);
+pub struct Token(pub TokenType, pub Range<usize>, pub Option<String>);
 
 impl Token {
     pub fn kind(&self) -> TokenType {

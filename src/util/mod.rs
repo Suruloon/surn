@@ -1,4 +1,5 @@
 pub mod token_stream;
+pub mod source;
 
 pub use self::token_stream::TokenStream;
 
@@ -11,7 +12,7 @@ pub trait StreamBuffer {
 
     /// Peeks the `n` times in the iterator
     fn peek_inc(&mut self, n: usize) {
-        for i in 0..n {
+        for _ in 0..n {
             self.peek();
         }
     }

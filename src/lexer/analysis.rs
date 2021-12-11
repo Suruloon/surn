@@ -42,7 +42,7 @@ impl Analyzer {
                 // Identifiers can NOT be next to eachother!
                 self.stream.peek_inc(1);
                 return Err(
-                    format!("Error! Identifiers can never be next to each-other in this context!\n -> The indentifier \"{}\" at {} is next to identifier \"{}\" at {}", token.value().unwrap(), token.1, second.value().unwrap(), second.1)
+                    format!("Error! Identifiers can never be next to each-other in this context!\n -> The indentifier \"{}\" at {}:{} is next to identifier \"{}\" at {}:{}", token.value().unwrap(), token.1.start, token.1.end, second.value().unwrap(), second.1.start, second.1.end)
                 );
             }
         }
@@ -72,8 +72,9 @@ impl Analyzer {
                 }
             }
             return Err(format!(
-                "Error! Parenthesis at {} is never closed!",
-                token.1
+                "Error! Parenthesis at {}:{} is never closed!",
+                token.1.start,
+                token.1.end
             ));
         }
 

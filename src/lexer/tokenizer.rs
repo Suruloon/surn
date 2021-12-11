@@ -9,10 +9,10 @@ use super::{
 
 macro_rules! token {
     ($start: expr, $end: expr, $t: expr, $v: expr) => {
-        Some(Token($t, Region::new($start, $end, None), $v))
+        Some(Token($t, $start..$end, $v))
     };
     ($start: expr, $end: expr, $t: expr) => {
-        Some(Token($t, Region::new($start, $end, None), None))
+        Some(Token($t, $start..$end, None))
     };
 }
 
