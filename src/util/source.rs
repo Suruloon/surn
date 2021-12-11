@@ -7,6 +7,7 @@ pub struct SourceBuffer {
     pub(crate) source: String,
 }
 
+#[derive(Clone, Debug)]
 pub struct SourceLine {
     offset: usize,
     len: usize,
@@ -24,6 +25,16 @@ impl SourceLine {
         }
     }
 
+    pub fn offset_relative(&self, range: Range<usize>) -> Range<usize> {
+        let start = range.start - self.offset;
+        let end = range.end - self.offset;
+        start..end
+    }
+
+    pub fn visual_offset(&self, range: Range<usize>) -> Range<usize> {
+
+    }
+
     pub fn offset(&self) -> usize {
         self.offset
     }
@@ -38,6 +49,11 @@ impl SourceLine {
 
     pub fn line(&self) -> usize {
         self.line
+    }
+
+    pub fn trim(mut self) -> Self {
+        self.source = self.source.trim_start().to_string();
+        self
     }
 }
 
@@ -64,7 +80,7 @@ impl SourceBuffer {
     pub fn get(&self, rng: Range<usize>) -> String {
         let mut result = String::new();
         for i in rng {
-            result.push(self.chars().nth(i).unwrap());
+            result.push(self.chars().nth(i).unwrap_or(' '));
         }
         result
     }
@@ -114,6 +130,6 @@ impl SourceBuffer {
     pub fn get_line_at(&self, offset: usize) -> Option<SourceLine> {
         self.get_lines()
             .into_iter()
-            .find(|line| line.offset <= offset && offset <= line.offset + line.len)
+            .find(|line| (offset >= line.offset()) && (offset < line.len()))
     }
 }
