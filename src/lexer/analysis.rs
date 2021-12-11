@@ -73,8 +73,7 @@ impl Analyzer {
             }
             return Err(format!(
                 "Error! Parenthesis at {}:{} is never closed!",
-                token.1.start,
-                token.1.end
+                token.1.start, token.1.end
             ));
         }
 

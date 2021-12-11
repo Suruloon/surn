@@ -1,4 +1,4 @@
-use std::{str::Chars, ops::Range};
+use std::{ops::Range, str::Chars};
 
 pub const END_OF_FILE: char = '\0';
 
