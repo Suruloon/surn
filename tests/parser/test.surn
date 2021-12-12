@@ -1,7 +1,7 @@
 class Test {
     pub x: string;
 
-    pub apple lmao fn construct() {
+    pub fn construct() {
         this.x = "hello";
     }
 

@@ -9,8 +9,10 @@ use crate::{lexer::keyword::KeyWord, types::TypeRef};
 #[derive(Debug, Clone)]
 pub enum Expression {
     /// A function call.
-    Call,
+    Call(Call),
     /// An array literal.
+    Array(Vec<Expression>),
+    
     /// A statement
     Statement(Box<Statement>),
     /// A literal value.
@@ -30,6 +32,7 @@ pub struct Literal {
 }
 // }}
 
+// Statements {{
 /// A statement is anything that can be executed.
 /// For example:
 /// - `x = 1`
@@ -199,7 +202,9 @@ impl Statement {
         }
     }
 }
+// }}
 
+// Visibility {{
 #[derive(Debug, Clone)]
 pub enum Visibility {
     /// Public visibility. Every module can see this.
@@ -224,7 +229,9 @@ impl Visibility {
         }
     }
 }
+//}}
 
+// Classes {{
 #[derive(Debug, Clone)]
 pub struct Class {
     pub name: String,
@@ -258,7 +265,9 @@ pub struct ClassProperty {
 }
 
 pub enum ClassBody {}
+// }}
 
+// Functions {{
 /// A function call or method call.
 #[derive(Debug, Clone)]
 pub struct Function {
@@ -282,6 +291,22 @@ pub struct FunctionInput {
     pub types: Vec<TypeRef>,
 }
 
+/// A function call or method call.
+/// This is calling a specific function.
+#[derive(Debug, Clone)]
+pub struct Call {
+    pub name: String,
+    pub value: Callee,
+    pub arguments: Vec<Expression>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Callee {
+    
+}
+// }}
+
+// Variables & Types {{
 #[derive(Debug, Clone)]
 pub struct Variable {
     pub name: String,
@@ -319,6 +344,7 @@ pub struct Path {
     /// - `bar, baz` in `foo::{bar, baz}`
     pub parts: Vec<Path>,
 }
+// }}
 
 // Macros {{
 #[derive(Debug, Clone)]
