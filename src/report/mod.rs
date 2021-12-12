@@ -56,6 +56,11 @@ impl Report {
         self
     }
 
+    pub fn set_name(mut self, name: String) -> Self {
+        self.name = name;
+        self
+    }
+
     pub fn set_message(mut self, message: String) -> Self {
         self.message = message;
         self
@@ -96,11 +101,15 @@ impl Report {
         let main_error = format!("{}! {}", self.kind, self.message);
         let header = format!(
             "{} [{}]",
-            repeat_char(Charset::defaults().dash, self.get_width() + 1),
+            repeat_char(Charset::defaults().dash, self.get_width() + 2),
             self.name
         );
         let spacer = format!(
-            "{}",
+            "{} |",
+            repeat_char(Charset::defaults().space, self.get_width())
+        );
+        let spacer2 = format!(
+            "\n{} |\n",
             repeat_char(Charset::defaults().space, self.get_width())
         );
         let snippets = self
@@ -116,7 +125,7 @@ impl Report {
                 main_error,
                 header,
                 spacer,
-                snippets.join("\n")
+                snippets.join(&spacer2)
             );
         } else {
             print!(
@@ -124,7 +133,7 @@ impl Report {
                 main_error,
                 header,
                 spacer,
-                snippets.join("\n")
+                snippets.join(&spacer2)
             );
         }
     }
@@ -211,7 +220,7 @@ impl Snippet {
             "{}",
             self.source
                 .get_line_at(self.range.start)
-                .unwrap()
+                .expect(format!("Could not find line for index at: {}", self.range.start).as_str())
                 .trim()
                 .source()
         );
@@ -223,7 +232,7 @@ impl Snippet {
         let line_num =
             SizedPadding::new(format!("{}", self.get_line()), Charset::defaults(), longest);
         let underline = format!(
-            "{} | {}",
+            "{} |{}",
             repeat_char(Charset::defaults().space, longest),
             format!(
                 "{}{} {}",
@@ -232,8 +241,7 @@ impl Snippet {
                     self.source
                         .get_line_at(self.range.start)
                         .unwrap()
-                        .offset_relative(self.range.clone())
-                        .count()
+                        .spaces_until(self.range.clone())
                 ),
                 repeat_char(Charset::defaults().underline, self.range.clone().count()),
                 inlined

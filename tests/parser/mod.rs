@@ -10,6 +10,6 @@ pub const TEST: &str = "tests/parser/test.surn";
 pub fn test_parse() {
     let contents = fs::read_to_string(TEST).unwrap();
     let mut parser = Parser::new(CompilerOptions::dev());
-    let body = parser.parse_script("Test Script".to_string(), contents);
+    let body = parser.parse_script("tests/parser/test.surn".to_string(), contents);
     dbg!(body);
 }

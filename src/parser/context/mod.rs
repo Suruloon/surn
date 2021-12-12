@@ -1,9 +1,6 @@
 use std::{collections::HashMap, fs::OpenOptions, io::Read, path::PathBuf};
 
-use crate::{
-    ast::{AstBody, Statement},
-    types::TypeStore,
-};
+use crate::{ast::AstBody, types::TypeStore};
 
 #[derive(Debug, Clone, PartialEq)]
 #[repr(u8)]
@@ -38,7 +35,7 @@ impl SourceMap {
     pub fn add(&mut self, source: SourceOrigin) -> bool {
         let search = match source.is_virtual() {
             true => source.path.as_ref().unwrap().to_str().unwrap().to_string(),
-            false => source.name.as_ref().unwrap().to_string(),
+            false => source.name.to_string(),
         };
 
         if self.get_by_path_or_name(search).is_none() {
@@ -55,10 +52,10 @@ impl SourceMap {
     }
 
     fn get_by_path_or_name(&self, search: String) -> Option<&SourceOrigin> {
-        for (id, origin) in self.internal.iter() {
+        for (_id, origin) in self.internal.iter() {
             if origin.is_virtual() {
                 // check the name
-                if origin.name.as_ref().unwrap().clone() == search {
+                if origin.name.clone() == search {
                     return Some(origin);
                 }
             } else {
@@ -80,7 +77,7 @@ pub struct SourceOrigin {
     /// Optional, the path to the file. (if virtual, add a name to the source.)
     pub path: Option<PathBuf>,
     /// The name of the source (if no path is specified)
-    pub name: Option<String>,
+    pub name: String,
     /// The current cached source. (only if virtual)
     contents: Option<String>,
     /// Whether or not the source is virtual.
@@ -91,8 +88,14 @@ impl SourceOrigin {
     /// Creates a new origin with the given path.
     pub fn new(path: PathBuf) -> Self {
         Self {
-            path: Some(path),
-            name: None,
+            path: Some(path.clone()),
+            name: path
+                .clone()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string(),
             contents: None,
             is_virtual: false,
         }
@@ -102,7 +105,7 @@ impl SourceOrigin {
     pub fn new_virtual(name: String, contents: String) -> Self {
         Self {
             path: None,
-            name: Some(name),
+            name,
             contents: Some(contents),
             is_virtual: true,
         }
@@ -176,7 +179,7 @@ impl ContextStore {
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    pub source: Option<SourceOrigin>,
+    pub source: SourceOrigin,
     pub body: AstBody,
     pub(crate) flags: ContextFlag,
     pub(crate) types: TypeStore,
@@ -187,7 +190,7 @@ pub struct Context {
 impl Context {
     pub fn new(source: SourceOrigin, id: u64) -> Self {
         Self {
-            source: Some(source),
+            source,
             body: AstBody::new(),
             flags: ContextFlag::None,
             types: TypeStore::new(Some(id)),

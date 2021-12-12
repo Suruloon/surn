@@ -34,6 +34,7 @@ pub struct TokenStream {
     /// The initial length of the buffer before iterating
     /// over it.
     initial_length: usize,
+    prev: Option<Token>,
 }
 
 impl TokenStream {
@@ -42,6 +43,7 @@ impl TokenStream {
         TokenStream {
             buffer: TokenIterator::new(tokens.clone()),
             initial_length: tokens.len(),
+            prev: None,
         }
     }
 }
@@ -52,7 +54,9 @@ impl StreamBuffer for TokenStream {
     /// Peeks the next item in the iterator
     /// Basically a `next` call on the iterator.
     fn peek(&mut self) -> Option<Self::Item> {
-        self.buffer.next()
+        let next = self.buffer.next();
+        self.prev = next.clone();
+        next
     }
 
     /// Attempts to reverse the last peeked item
@@ -60,6 +64,12 @@ impl StreamBuffer for TokenStream {
     fn unpeek(&mut self) -> Option<Self::Item> {
         // TODO: Implement this properly
         None
+    }
+
+    /// Returns the last peeked item
+    /// If the last peeked item was not reversed, it will return `None`
+    fn prev(&self) -> Option<Self::Item> {
+        self.prev.clone()
     }
 
     /// Returns whether or not the buffer is empty.

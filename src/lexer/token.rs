@@ -225,6 +225,31 @@ impl TokenType {
     }
 }
 
+impl ToString for TokenType {
+    fn to_string(&self) -> String {
+        match self {
+            TokenType::Variable => "Variable".to_string(),
+            TokenType::Colon => "Colon".to_string(),
+            TokenType::Comment => "Comment".to_string(),
+            TokenType::KeyWord => "KeyWord".to_string(),
+            TokenType::Identifier => "Identifier".to_string(),
+            TokenType::Number => "Number".to_string(),
+            TokenType::StringLiteral => "String".to_string(),
+            TokenType::Operator => "Operator".to_string(),
+            TokenType::StatementEnd => "Statement End".to_string(),
+            TokenType::LineBreak => "EndOfLine".to_string(),
+            TokenType::Boolean => "Boolean".to_string(),
+            TokenType::LeftBracket => "Opening Delimiter".to_string(),
+            TokenType::RightBracket => "Closing Delimiter".to_string(),
+            TokenType::LeftParenthesis => "Opening Delimiter".to_string(),
+            TokenType::RightParenthesis => "Closing Delimiter".to_string(),
+            TokenType::LeftBrace => "Opening Delimiter".to_string(),
+            TokenType::RightBrace => "Closing Delimiter".to_string(),
+            TokenType::Comma => "Comma".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Token(pub TokenType, pub Range<usize>, pub Option<String>);
 
@@ -235,5 +260,9 @@ impl Token {
 
     pub fn value(&self) -> Option<String> {
         self.2.clone()
+    }
+
+    pub fn range(&self) -> Range<usize> {
+        self.1.clone()
     }
 }

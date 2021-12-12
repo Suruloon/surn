@@ -21,6 +21,9 @@ pub trait StreamBuffer {
     /// If the last peeked item was not reversed, it will return `None`
     fn unpeek(&mut self) -> Option<Self::Item>;
 
+    /// Attempts to reverse the last peeked item
+    fn prev(&self) -> Option<Self::Item>;
+
     /// Returns whether or not the buffer is empty.
     fn is_eof(&self) -> bool;
 

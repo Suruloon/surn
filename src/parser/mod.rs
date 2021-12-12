@@ -1,6 +1,9 @@
+use std::process;
+
 use crate::{
     ast::{
-        AstBody, Class, ClassProperty, Function, FunctionInput, Statement, Variable, Visibility,
+        AstBody, Class, ClassProperty, Expression, Function, FunctionInput, Statement, Variable,
+        Visibility,
     },
     lexer::{
         analysis::analyze,
@@ -8,12 +11,38 @@ use crate::{
         token::{Token, TokenType},
         tokenizer::tokenize,
     },
-    types::{self, Type, TypeKind, TypeRef},
-    util::{StreamBuffer, TokenStream},
+    report::Report,
+    types::{Type, TypeKind, TypeRef},
+    util::{source::SourceBuffer, StreamBuffer, TokenStream},
     CompilerOptions,
 };
 
 use self::context::{Context, ContextFlag, ContextStore, SourceOrigin};
+
+macro_rules! create_report {
+    ($ctx: expr, $location: expr, $message: expr) => {
+        Report::new()
+            .set_source(SourceBuffer::new(
+                $ctx.source.clone().get_contents().unwrap(),
+            ))
+            .set_name($ctx.source.clone().name)
+            .set_message("Occurred while parsing".to_string())
+            .make_snippet($location, $message, None)
+            .print();
+        process::exit(1);
+    };
+    ($ctx: expr, $location: expr, $message: expr, $inline: expr) => {
+        Report::new()
+            .set_source(SourceBuffer::new(
+                $ctx.source.clone().get_contents().unwrap(),
+            ))
+            .set_name($ctx.source.clone().name)
+            .set_message("Occurred while parsing".to_string())
+            .make_snippet($location, $message, Some($inline))
+            .print();
+        process::exit(1);
+    };
+}
 
 pub mod context;
 
@@ -60,9 +89,10 @@ impl AstGenerator {
 
         // we don't know what this is!
         dbg!(self.body.clone());
-        panic!(
-            "{}",
-            format!("Unexpected token: {:?}", self.tokens.first().unwrap())
+        create_report!(
+            self.context,
+            self.tokens.peek().unwrap().range(),
+            "Unknown statement".to_string()
         );
     }
 
@@ -88,8 +118,11 @@ impl AstGenerator {
                     // we can't parse this statement
                     // this is an error.
                     if !self.tokens.first().unwrap().kind().is_keyword() {
-                        dbg!(self.tokens.first().unwrap());
-                        panic!("{}", "Expected a declaration keyword after visibility keyword, but found something different.".to_string());
+                        create_report!(
+                            self.context,
+                            first_token.1,
+                            format!("Expected one of \"const\", \"var\", \"class\", \"enum\" or \"interface\" but found: {}", self.tokens.first().unwrap().value().unwrap())
+                        );
                     }
 
                     // we can proceed to check the keyword
@@ -98,9 +131,11 @@ impl AstGenerator {
                             .unwrap();
 
                     if !declaration_keyword.is_declarative() {
-                        panic!(
-                            "{}",
-                            "Expected a declaration keyword after visibility keyword.".to_string(),
+                        create_report!(
+                            self.context,
+                            first_token.1,
+                            "One of \"const\", \"var\", \"class\", \"enum\" or \"interface\" must follow a visibilty keyword.".to_string(),
+                            "Unexpected visibilty".to_string()
                         );
                     }
 
@@ -122,26 +157,48 @@ impl AstGenerator {
     fn parse_function_inputs(&mut self) -> (Vec<FunctionInput>, Vec<TypeRef>) {
         let mut inputs = Vec::<FunctionInput>::new();
         let mut outputs = Vec::<TypeRef>::new();
-        if !self.tokens.peek().unwrap().kind().is_left_parenthesis() {
-            panic!(
-                "{}",
-                "Expected a left parenthesis after declaraition.".to_string()
+        if !self.tokens.first().unwrap().kind().is_left_parenthesis() {
+            create_report!(
+                self.context,
+                self.tokens.first().unwrap().1,
+                format!(
+                    "Expected a left parenthesis but found: {}",
+                    self.tokens.first().unwrap().value().unwrap()
+                )
             );
         }
+        self.tokens.peek();
 
         while !self.tokens.first().unwrap().kind().is_right_parenthesis() && !self.tokens.is_eof() {
             let name = self.tokens.peek().unwrap();
 
             if !name.kind().is_identifier() {
-                panic!(
-                    "{}",
-                    "Expected a paramater name but got nothing.".to_string()
+                create_report!(
+                    self.context,
+                    name.range(),
+                    format!("Only function parameters can follow a function name."),
+                    format!(
+                        "Unexpected {} \"{}\"",
+                        name.kind().to_string(),
+                        name.value().unwrap()
+                    )
                 );
             }
 
-            if !self.tokens.peek().unwrap().kind().is_colon() {
-                panic!("{}", "Expected a colon after paramater name.".to_string());
+            if !self.tokens.first().unwrap().kind().is_colon() {
+                create_report!(
+                    self.context,
+                    name.range(),
+                    format!("Expected a colon after a function parameter name."),
+                    format!(
+                        "Unexpected {} \"{}\"",
+                        self.tokens.first().unwrap().kind().to_string(),
+                        self.tokens.first().unwrap().value().unwrap()
+                    )
+                );
             }
+
+            self.tokens.peek();
 
             let types = self.parse_type_list();
 
@@ -155,9 +212,17 @@ impl AstGenerator {
             });
         }
 
-        if !self.tokens.peek().unwrap().kind().is_right_parenthesis() {
-            panic!("{}", "Expected a right parenthesis to close .".to_string());
+        if !self.tokens.first().unwrap().kind().is_right_parenthesis() {
+            create_report!(
+                self.context,
+                self.tokens.first().unwrap().1,
+                format!(
+                    "Unexpected token: \"{}\"",
+                    self.tokens.first().unwrap().value().unwrap()
+                )
+            );
         } else {
+            self.tokens.peek();
             // we have a return type that is NOT void.
             if self.tokens.first().unwrap().kind().is_colon() {
                 self.tokens.peek();
@@ -183,9 +248,11 @@ impl AstGenerator {
                 let name = self.tokens.peek().unwrap();
 
                 if !name.kind().is_identifier() {
-                    panic!(
-                        "{}",
-                        "Expected a class name after class keyword.".to_string()
+                    create_report!(
+                        self.context,
+                        name.range(),
+                        format!("A class name must follow a class declaration."),
+                        format!("Unexpected token \"{}\"", name.kind().to_string())
                     );
                 }
 
@@ -209,9 +276,11 @@ impl AstGenerator {
                 let name = self.tokens.peek().unwrap();
 
                 if !name.kind().is_identifier() {
-                    panic!(
-                        "{}",
-                        "Expected a variable name after const keyword.".to_string()
+                    create_report!(
+                        self.context,
+                        name.range(),
+                        format!("A constant name must follow a constant declaration."),
+                        format!("Unexpected token \"{}\"", name.kind().to_string())
                     );
                 }
 
@@ -251,20 +320,59 @@ impl AstGenerator {
         let name = self.tokens.peek().unwrap();
 
         if !name.kind().is_identifier() {
-            panic!("{}", "Expected a variable name.".to_string());
+            create_report!(
+                self.context,
+                name.range(),
+                format!("A class property name must follow a class property declaration."),
+                format!("Unexpected token \"{}\"", name.kind().to_string())
+            );
         }
 
         // we know the variable name now
         let variable_name = name.value().unwrap().to_string();
-        // we need to assign this variable a new id!
-        let variable_id = self.context.get_next_local_id();
 
-        // attempt to parse a type
-        // let type_ref: TypeRef = self.parse_type();
-
-        // we need to parse an expression for the variable
         let next = self.tokens.first().unwrap();
 
+        // we need to check if the next token is a type or not
+        // if it's the beginning of an assignment, we need to parse the expression.
+        if next.kind().is_colon() {
+            self.tokens.peek();
+            // the next few tokens are a type expression.
+            let type_data = self.parse_type_list();
+            // we're going to parse the expression for the variable now.
+            let expression: Option<Expression> = {
+                // get the next token
+                let next = self.tokens.peek().unwrap();
+                if next.kind().is_assignment() {
+                    create_report!(
+                        self.context,
+                        next.range(),
+                        format!("Expected an assignment or statement end after a class property declaration."),
+                        format!("Unexpected token \"{}\"", next.kind().to_string())
+                    );
+                    // self.parse_expression()
+                } else if next.kind().is_statement_end() {
+                    None
+                } else {
+                    create_report!(
+                        self.context,
+                        next.range(),
+                        format!("Expected an assignment or statement end after a class property declaration."),
+                        format!("Unexpected token \"{}\"", next.kind().to_string())
+                    );
+                }
+            };
+
+            // we're done parsing the expression, so we can safely return the variable.
+            return ClassProperty {
+                name: variable_name,
+                visibility: visibility,
+                // this is temprorary
+                value: expression,
+                // this is also temporary
+                type_ref: TypeRef { context: 0, id: 0 },
+            };
+        }
         // we're going to parse the expression for the variable now.
         // let expression = self.parse_expression();
 
@@ -282,10 +390,13 @@ impl AstGenerator {
         // function statement lulz
         let name = self.tokens.peek().unwrap();
 
-        dbg!(&name);
-
         if !name.kind().is_identifier() {
-            panic!("{}", "Expected a method name.".to_string());
+            create_report!(
+                self.context,
+                name.range(),
+                format!("A class method name must follow a class method declaration."),
+                format!("Unexpected token \"{}\"", name.kind().to_string())
+            );
         }
 
         // we know the method name now
@@ -316,9 +427,11 @@ impl AstGenerator {
         let next = self.tokens.peek().unwrap();
 
         if !next.kind().is_left_brace() {
-            panic!(
-                "{}",
-                "Expected a brace after class name, this opens a class body.".to_string()
+            create_report!(
+                self.context,
+                next.range(),
+                format!("A class body must follow a class declaration. You should open a body with a brace here."),
+                format!("Unexpected token \"{}\"", next.kind().to_string())
             );
         }
 
@@ -328,7 +441,6 @@ impl AstGenerator {
         // this is the only special case where we need to specially parse a body or block of code
         // because of how php works :rage:
         while !self.tokens.first().unwrap().kind().is_right_brace() && !self.tokens.is_eof() {
-            println!("Inside class parsing loop");
             let next_token = self.tokens.first().unwrap();
             let statement: Statement = match next_token.kind() {
                 TokenType::KeyWord => {
@@ -342,9 +454,15 @@ impl AstGenerator {
                             self.parse_declaration(Visibility::Private, keyword)
                                 .unwrap()
                         } else {
-                            panic!("{}", "This keyword is useless in this context.".to_string());
-                            // this is unreachable, but whatever.
-                            continue;
+                            create_report!(
+                                self.context,
+                                next_token.range(),
+                                format!("This keyword is useless in class context."),
+                                format!(
+                                    "Useless Keyword \"{}\"",
+                                    next_token.value().unwrap().to_string()
+                                )
+                            );
                         }
                     } else if keyword.is_visibility() {
                         // we're going to expect a identifier OR a declaration next, so we can parse it
@@ -362,6 +480,7 @@ impl AstGenerator {
                                 self.tokens.peek();
                                 self.parse_class_method(Visibility::from_keyword(keyword))
                             } else if keyword.is_declarative() {
+                                dbg!(&keyword);
                                 self.tokens.peek();
                                 // check what kind of declaration it is
                                 // if its immutable, we can parse it, if it's not, we can't 😔
@@ -369,16 +488,23 @@ impl AstGenerator {
                                     self.parse_declaration(Visibility::Private, keyword)
                                         .unwrap()
                                 } else {
-                                    panic!(
-                                        "{}",
-                                        "This keyword is useless in this context.".to_string()
+                                    create_report!(
+                                        self.context,
+                                        next_token.range(),
+                                        format!("This keyword is useless in class context."),
+                                        format!(
+                                            "Useless Keyword \"{}\"",
+                                            next_token.value().unwrap().to_string()
+                                        )
                                     );
-                                    // this is unreachable, but whatever.
-                                    continue;
                                 }
                             } else {
-                                panic!("{}", "Expected a variable or function name after visibility keyword.".to_string());
-                                continue;
+                                create_report!(
+                                    self.context,
+                                    next_token.range(),
+                                    format!("One of \"const\", \"var\", \"class\", \"enum\" or \"interface\" must follow a visibilty keyword."),
+                                    format!("Unexpected {}: \"{}\"", next_token.kind().to_string(), next_token.value().unwrap().to_string())
+                                );
                             }
                         } else {
                             let property =
@@ -388,13 +514,23 @@ impl AstGenerator {
                             continue;
                         }
                     } else {
-                        self.tokens.peek().unwrap();
-                        continue;
+                        create_report!(
+                            self.context,
+                            next_token.range(),
+                            format!("One of \"const\", \"var\", \"class\", \"enum\" or \"interface\" must follow a visibilty keyword."),
+                            format!("Unexpected {}: \"{}\"", next_token.kind().to_string(), next_token.value().unwrap().to_string())
+                        );
                     }
                 }
                 _ => {
-                    self.tokens.peek().unwrap();
-                    continue;
+                    create_report!(
+                        self.context,
+                        next_token.range(),
+                        format!(
+                            "Illegal token in class body \"{}\"",
+                            next_token.kind().to_string()
+                        )
+                    );
                 }
             };
 
@@ -403,14 +539,21 @@ impl AstGenerator {
         }
 
         if self.tokens.is_eof() {
-            panic!("{}", "This class is never closed.".to_string());
+            create_report!(
+                self.context,
+                self.tokens.prev().unwrap().range(),
+                format!("This class is never closed."),
+                format!("Unexpected end of file")
+            );
         }
 
         // this should never happen, but in the event it does,
         if !self.tokens.first().unwrap().kind().is_right_brace() {
-            panic!(
-                "{}",
-                "Expected a brace to close the class body.".to_string()
+            create_report!(
+                self.context,
+                self.tokens.prev().unwrap().range(),
+                format!("This class is never closed."),
+                format!("Unexpected end of file")
             );
         }
 
@@ -441,7 +584,14 @@ impl AstGenerator {
                         self.tokens.peek();
                         continue;
                     } else {
-                        panic!("Invalid type expression")
+                        create_report!(
+                            self.context,
+                            tk.range(),
+                            format!(
+                                "Unexpected operator \"{}\" in type statement",
+                                tk.kind().to_string()
+                            )
+                        );
                     }
                 }
                 _ => break,
@@ -459,8 +609,6 @@ impl AstGenerator {
         let tk = self.tokens.peek().unwrap();
         let mut statements: Vec<Statement> = Vec::new();
 
-        dbg!(&tk);
-
         if tk.kind().is_left_brace() {
             // this is a bit hacky, but bare with me.
             // we are going to parse a statement until we find a right brace.
@@ -473,16 +621,23 @@ impl AstGenerator {
             }
 
             if self.tokens.is_eof() || !self.tokens.first().unwrap().kind().is_right_brace() {
-                panic!("{}", "Unexpected end of scope.".to_string());
+                create_report!(
+                    self.context,
+                    self.tokens.prev().unwrap().range(),
+                    format!("This scope is never closed."),
+                    format!("Unexpected end of file")
+                );
             }
 
             self.tokens.peek().unwrap();
 
             return statements;
         } else {
-            panic!(
-                "{}",
-                "Expected a brace in this context, this opens a block of code.".to_string()
+            create_report!(
+                self.context,
+                self.tokens.prev().unwrap().range(),
+                format!("Expected a left brace to open this scope body."),
+                format!("Unexpected token \"{}\"", tk.kind().to_string())
             );
         }
     }

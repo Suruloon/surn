@@ -16,10 +16,10 @@ pub struct SourceLine {
 }
 
 impl SourceLine {
-    pub fn new(offset: usize, len: usize, line: usize, source: String) -> Self {
+    pub fn new(offset: usize, line: usize, source: String) -> Self {
         Self {
             offset,
-            len,
+            len: source.len(),
             line,
             source,
         }
@@ -31,8 +31,15 @@ impl SourceLine {
         start..end
     }
 
-    pub fn visual_offset(&self, range: Range<usize>) -> Range<usize> {
+    /// Returns the location of the error relative to the line with trimming.
+    pub fn spaces_until(&self, range: Range<usize>) -> usize {
+        let trimmed = self.source.trim_start().to_string();
+        let relative = self.offset_relative(range);
 
+        // get the offset based on the amount that was trimmed off.
+        let trimmed_amt = self.len() - trimmed.len();
+        let start = relative.start - trimmed_amt;
+        start + 1
     }
 
     pub fn offset(&self) -> usize {
@@ -45,6 +52,10 @@ impl SourceLine {
 
     pub fn source(&self) -> &str {
         &self.source
+    }
+
+    pub fn offset_max(&self) -> usize {
+        self.offset + self.len
     }
 
     pub fn line(&self) -> usize {
@@ -130,6 +141,6 @@ impl SourceBuffer {
     pub fn get_line_at(&self, offset: usize) -> Option<SourceLine> {
         self.get_lines()
             .into_iter()
-            .find(|line| (offset >= line.offset()) && (offset < line.len()))
+            .find(|line| (offset >= line.offset()) && (offset < line.offset_max()))
     }
 }
