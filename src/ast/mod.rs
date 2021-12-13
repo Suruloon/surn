@@ -1,5 +1,8 @@
 use crate::{lexer::keyword::KeyWord, types::TypeRef};
 
+use self::ops::AnyOperation;
+pub mod ops;
+
 // Expressions {{
 
 /// An expression is any thing that can be evaluated to a value.
@@ -8,14 +11,45 @@ use crate::{lexer::keyword::KeyWord, types::TypeRef};
 ///  - `some_function()`
 #[derive(Debug, Clone)]
 pub enum Expression {
-    /// A function call.
+    /// A regular function call.
+    ///
+    /// For example:
+    /// - `some_function()`
     Call(Call),
+    /// A method call.
+    ///
+    /// For example:
+    /// - `x.method()`
+    MethodCall(MethodCall),
     /// An array literal.
-    Array(Vec<Expression>),
-    
+    ///
+    /// For example:
+    /// - `[1, 2, 3]`
+    /// - `[1; 10]`
+    Array(Array),
+    /// An Object Literal.
+    /// For example:
+    /// - `{ key: "value" }`
+    Object(Object),
+    /// An Operation.
+    ///
+    /// For example:
+    /// - `1 + 2`
+    /// - `1 - 2`
+    Operation(Operation),
     /// A statement
     Statement(Box<Statement>),
+    /// A member expression
+    ///
+    /// For example:
+    /// - `x.y`
+    /// - `x[y]`
+    /// - `x.y.z`
+    /// - `x[y].z`
+    /// - `x.y[z]`
+    Member(MemberListNode),
     /// A literal value.
+    ///
     /// For example:
     /// - `1`
     /// - `"hello"`
@@ -29,6 +63,54 @@ pub struct Literal {
     pub value: String,
     /// The type of the literal assumed by the compiler
     pub type_node: Option<TypeRef>,
+}
+
+/// A member list is a list of members.
+/// For example:
+/// - `x.y`
+///
+/// The `name` is the value of the last member.
+/// The `origin` is the value that the prop is coming from.
+#[derive(Debug, Clone)]
+pub struct MemberListNode {
+    pub name: String,
+    pub origin: Box<Expression>,
+}
+
+/// An array literal. This represents an array of values.
+/// The values in the array are validated after parsing.
+/// For example:
+/// - `[1, 2, 3]`
+/// - `[1; 10]`
+#[derive(Debug, Clone)]
+pub struct Array {
+    pub values: Vec<Expression>,
+    pub type_node: Option<TypeRef>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Object {
+    /// The properties of the object.
+    pub properties: Vec<ObjectProperty>,
+    /// The type of the object.
+    /// This is used to validate the object.
+    /// However it can be None if the object is annonymous.
+    pub type_node: Option<TypeRef>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ObjectProperty {
+    /// The name of the property.
+    pub name: String,
+    /// The value of the property.
+    pub value: Expression,
+}
+
+#[derive(Debug, Clone)]
+pub struct Operation {
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
+    pub op: AnyOperation,
 }
 // }}
 
@@ -44,9 +126,9 @@ pub struct Literal {
 #[derive(Debug, Clone)]
 pub enum Statement {
     /// A var statement.
-    Mutable(Variable),
+    Var(Variable),
     /// A const statement.
-    Immutable(Variable),
+    Const(Variable),
     /// A static statement.
     Static(Box<Statement>),
     /// A function declaration.
@@ -120,14 +202,14 @@ impl Statement {
 
     pub fn get_mutable(&self) -> Option<Variable> {
         match self {
-            Statement::Mutable(v) => Some(v.clone()),
+            Statement::Var(v) => Some(v.clone()),
             _ => None,
         }
     }
 
     pub fn get_immutable(&self) -> Option<Variable> {
         match self {
-            Statement::Immutable(v) => Some(v.clone()),
+            Statement::Const(v) => Some(v.clone()),
             _ => None,
         }
     }
@@ -176,14 +258,14 @@ impl Statement {
 
     pub fn is_mutable(&self) -> bool {
         match self {
-            Statement::Mutable(_) => true,
+            Statement::Var(_) => true,
             _ => false,
         }
     }
 
     pub fn is_immutable(&self) -> bool {
         match self {
-            Statement::Immutable(_) => true,
+            Statement::Const(_) => true,
             _ => false,
         }
     }
@@ -293,16 +375,29 @@ pub struct FunctionInput {
 
 /// A function call or method call.
 /// This is calling a specific function.
+/// For example:
+/// - `foo()`
 #[derive(Debug, Clone)]
 pub struct Call {
+    /// The name of the function being called.
+    /// This is the name of the function, not the name of the variable.
     pub name: String,
-    pub value: Callee,
+    /// The arugments being passed to the function.
     pub arguments: Vec<Expression>,
 }
 
+/// A method call.
+/// For example:
+/// - `foo.bar()`
 #[derive(Debug, Clone)]
-pub enum Callee {
-    
+pub struct MethodCall {
+    /// The name of the function being called.
+    /// This is the name of the function, not the name of the variable.
+    pub name: String,
+    /// The arugments being passed to the function.
+    pub arguments: Vec<Expression>,
+    /// The callee of the method call.
+    pub callee: Box<Expression>,
 }
 // }}
 
@@ -317,6 +412,21 @@ pub struct Variable {
 }
 
 impl Variable {
+    pub fn new(
+        name: String,
+        type_ref: TypeRef,
+        visibility: Visibility,
+        assignment: Option<Expression>,
+    ) -> Self {
+        Self {
+            name,
+            node_id: 0,
+            type_ref,
+            visibility,
+            assignment,
+        }
+    }
+
     pub fn is_uninit(&self) -> bool {
         self.assignment.is_none()
     }
@@ -360,6 +470,7 @@ pub struct CompilerMacro {
 }
 // }}
 
+// AST {{
 #[derive(Debug, Clone)]
 pub struct AstBody {
     // todo: Compiler flags
@@ -388,3 +499,4 @@ impl AstBody {
         &self.program
     }
 }
+//}}

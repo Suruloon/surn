@@ -7,6 +7,8 @@ pub enum TypeKind {
     BuiltIn(BuiltInType),
     Ref(TypeRef),
     Other(TypeRef),
+    Union(Vec<TypeRef>),
+    Unknown,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +29,16 @@ pub struct TypeRef {
     pub id: u64,
 }
 
+impl TypeRef {
+    pub fn new(context: u64, id: u64) -> Self {
+        Self { context, id }
+    }
+
+    pub fn empty() -> Self {
+        Self { context: 0, id: 0 }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Type {
     /// The name of the type.
@@ -37,6 +49,20 @@ pub struct Type {
     pub kind: TypeKind,
     /// The id of the type.
     pub id: u64,
+}
+
+impl Type {
+    pub fn new(kind: TypeKind, name: String) -> Type {
+        Type { kind, name, id: 0 }
+    }
+
+    pub fn uninit() -> Self {
+        Type {
+            kind: TypeKind::Unknown,
+            name: "".to_string(),
+            id: 0,
+        }
+    }
 }
 
 /// Storage for ALL types.

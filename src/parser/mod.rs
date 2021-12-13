@@ -19,6 +19,8 @@ use crate::{
 
 use self::context::{Context, ContextFlag, ContextStore, SourceOrigin};
 
+pub mod context;
+
 macro_rules! create_report {
     ($ctx: expr, $location: expr, $message: expr) => {
         Report::new()
@@ -44,36 +46,83 @@ macro_rules! create_report {
     };
 }
 
-pub mod context;
+/// Returns the current token stack
+pub(crate) struct TokenStack {
+    /// A vector of tokens with their location in the token stream
+    pub tokens: Vec<(usize, Token)>,
+}
+
+impl TokenStack {
+    pub fn new() -> Self {
+        TokenStack { tokens: Vec::new() }
+    }
+
+    pub fn clear(&mut self) {
+        self.tokens.clear();
+    }
+
+    pub fn push(&mut self, idx: usize, token: Token) {
+        self.tokens.push((idx, token));
+    }
+
+    pub fn first(&self) -> Option<Token> {
+        if let Some((_, token)) = self.tokens.get(0) {
+            Some(token.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn nth(&self, n: usize) -> Option<Token> {
+        if let Some((_, token)) = self.tokens.get(n) {
+            Some(token.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn nth_or(&self, n: usize, token: Token) -> Token {
+        if let Some((_, token)) = self.tokens.get(n) {
+            token.clone()
+        } else {
+            token
+        }
+    }
+
+    pub fn nth_unwrap(&self, n: usize) -> Token {
+        if let Some((_, token)) = self.tokens.get(n) {
+            token.clone()
+        } else {
+            panic!("TokenStack::nth_unwrap: index out of bounds");
+        }
+    }
+}
 
 pub struct AstGenerator {
     pub(crate) body: AstBody,
     pub(crate) tokens: TokenStream,
     pub(crate) context: Context,
+    stack: TokenStack,
 }
 
+/// Parses the given token stream into an AST.
+/// Returns a Result containing the AST.
+/// AST is **not** optimized during this stage, however it is validated.
 impl AstGenerator {
     pub fn new(source: SourceOrigin, id: u64) -> Self {
         AstGenerator {
             body: AstBody::new(),
             tokens: TokenStream::new(Vec::new()),
             context: Context::new(source, id),
+            stack: TokenStack::new(),
         }
     }
-}
 
-// pub struct ParsingContext {
-//     pub context_store: ContextStore,
-// }
-
-/// Parses the given token stream into an AST.
-/// Returns a Result containing the AST.
-/// AST is **not** optimized during this stage, however it is validated.
-impl AstGenerator {
     pub fn begin_parse(&mut self, tokens: TokenStream) -> AstBody {
         self.tokens = tokens;
 
         while !self.tokens.is_eof() {
+            self.skip_whitespace();
             self.parse();
         }
 
@@ -87,563 +136,199 @@ impl AstGenerator {
             return;
         }
 
+        if let Some(expr) = self.parse_expression() {
+            self.body.push_expression(expr);
+            return;
+        }
+
         // we don't know what this is!
-        dbg!(self.body.clone());
+        // the only body we can have is a statement or an expression
         create_report!(
             self.context,
-            self.tokens.peek().unwrap().range(),
-            "Unknown statement".to_string()
+            self.tokens.first().unwrap().range(),
+            "Unable to proceed parsing. This token was unexpected at this time.".to_string(),
+            format!(
+                "Unexpected token: {}",
+                self.tokens.peek().unwrap().kind().to_string()
+            )
         );
     }
 
+    /// A statement can be a variable declaration, function declaration, class declaration, etc.
     fn parse_statement(&mut self) -> Option<Statement> {
-        let first_token = self.tokens.first().unwrap();
+        // because we're making this top level, we can parse all statements in the global context.
 
-        return match first_token.kind() {
-            TokenType::KeyWord => {
-                let keyword = KeyWord::from_string(&first_token.value().unwrap()).unwrap();
-
-                // check if the keyword is a variable declaration
-                if keyword.is_declarative() {
-                    self.tokens.peek();
-                    return self.parse_declaration(Visibility::Private, keyword);
-                }
-
-                if keyword.is_visibility() {
-                    // we're going to expect a declaration next, so we can parse it
-                    // however, lets consume the visibility keyword token from the stream.
-                    self.tokens.peek();
-
-                    // check the next token to see if it's a declaration keyword, if not,
-                    // we can't parse this statement
-                    // this is an error.
-                    if !self.tokens.first().unwrap().kind().is_keyword() {
-                        create_report!(
-                            self.context,
-                            first_token.1,
-                            format!("Expected one of \"const\", \"var\", \"class\", \"enum\" or \"interface\" but found: {}", self.tokens.first().unwrap().value().unwrap())
-                        );
-                    }
-
-                    // we can proceed to check the keyword
-                    let declaration_keyword =
-                        KeyWord::from_string(&self.tokens.first().unwrap().value().unwrap())
-                            .unwrap();
-
-                    if !declaration_keyword.is_declarative() {
-                        create_report!(
-                            self.context,
-                            first_token.1,
-                            "One of \"const\", \"var\", \"class\", \"enum\" or \"interface\" must follow a visibilty keyword.".to_string(),
-                            "Unexpected visibilty".to_string()
-                        );
-                    }
-
-                    return self
-                        .parse_declaration(Visibility::from_keyword(keyword), declaration_keyword);
-                }
-                None
-            }
-            _ => None,
-        };
-    }
-
-    // fn parse_function(&mut self, visibility: Visibility) -> Option<Statement> {
-    // }
-
-    /// This function assumes that the first token is a left parenthesis.
-    /// This function will consume the function arguments, and type and return it, leaving the
-    /// token stream with a left bracket.
-    fn parse_function_inputs(&mut self) -> (Vec<FunctionInput>, Vec<TypeRef>) {
-        let mut inputs = Vec::<FunctionInput>::new();
-        let mut outputs = Vec::<TypeRef>::new();
-        if !self.tokens.first().unwrap().kind().is_left_parenthesis() {
-            create_report!(
-                self.context,
-                self.tokens.first().unwrap().1,
-                format!(
-                    "Expected a left parenthesis but found: {}",
-                    self.tokens.first().unwrap().value().unwrap()
-                )
-            );
-        }
-        self.tokens.peek();
-
-        while !self.tokens.first().unwrap().kind().is_right_parenthesis() && !self.tokens.is_eof() {
-            let name = self.tokens.peek().unwrap();
-
-            if !name.kind().is_identifier() {
-                create_report!(
-                    self.context,
-                    name.range(),
-                    format!("Only function parameters can follow a function name."),
-                    format!(
-                        "Unexpected {} \"{}\"",
-                        name.kind().to_string(),
-                        name.value().unwrap()
-                    )
-                );
-            }
-
-            if !self.tokens.first().unwrap().kind().is_colon() {
-                create_report!(
-                    self.context,
-                    name.range(),
-                    format!("Expected a colon after a function parameter name."),
-                    format!(
-                        "Unexpected {} \"{}\"",
-                        self.tokens.first().unwrap().kind().to_string(),
-                        self.tokens.first().unwrap().value().unwrap()
-                    )
-                );
-            }
-
-            self.tokens.peek();
-
-            let types = self.parse_type_list();
-
-            if self.tokens.first().unwrap().kind().is_comma() {
-                self.tokens.peek();
-            }
-
-            inputs.push(FunctionInput {
-                name: name.value().unwrap().to_string(),
-                types: types,
-            });
-        }
-
-        if !self.tokens.first().unwrap().kind().is_right_parenthesis() {
-            create_report!(
-                self.context,
-                self.tokens.first().unwrap().1,
-                format!(
-                    "Unexpected token: \"{}\"",
-                    self.tokens.first().unwrap().value().unwrap()
-                )
-            );
-        } else {
-            self.tokens.peek();
-            // we have a return type that is NOT void.
-            if self.tokens.first().unwrap().kind().is_colon() {
-                self.tokens.peek();
-                outputs = self.parse_type_list();
+        // try to parse a mutable variable.
+        if let Some((var, constant)) = self.parse_variable() {
+            if constant {
+                return Some(Statement::Const(var));
+            } else {
+                return Some(Statement::Var(var));
             }
         }
 
-        return (inputs, outputs);
-    }
-
-    /// Parses a **Global** declaration.
-    /// This is a declaration that is not attached to a class.
-    /// However a class body will utilize this function to parse its own `constant` declarations.
-    fn parse_declaration(&mut self, visibility: Visibility, keyword: KeyWord) -> Option<Statement> {
-        // checks the type of declaration it is, and parses it accordingly
-        match keyword {
-            KeyWord::Class => {
-                let mut class = Class::new(visibility);
-                // we're parsing a class here!
-                // we expect a class name next, so we can parse it
-                // however before that, let's set the contexts flags to reflect this
-                self.context.flags = ContextFlag::InClass;
-                let name = self.tokens.peek().unwrap();
-
-                if !name.kind().is_identifier() {
-                    create_report!(
-                        self.context,
-                        name.range(),
-                        format!("A class name must follow a class declaration."),
-                        format!("Unexpected token \"{}\"", name.kind().to_string())
-                    );
-                }
-
-                // we know the class name now
-                class.name = name.value().unwrap().to_string();
-                // we need to assign this class a new id!
-                class.node_id = self.context.get_next_local_id();
-
-                // we're going to parse the body of the class now.
-                let body = self.parse_class_body(&mut class);
-
-                class.body = body;
-
-                // we're done parsing the class body, so we can safely return the class.
-                return Some(Statement::Class(class));
-            }
-
-            KeyWord::Const => {
-                // we're going to parse a constant declaration
-                // we expect a variable name next, so we can parse it
-                let name = self.tokens.peek().unwrap();
-
-                if !name.kind().is_identifier() {
-                    create_report!(
-                        self.context,
-                        name.range(),
-                        format!("A constant name must follow a constant declaration."),
-                        format!("Unexpected token \"{}\"", name.kind().to_string())
-                    );
-                }
-
-                // we know the variable name now
-                let variable_name = name.value().unwrap().to_string();
-                // we need to assign this variable a new id!
-                let variable_id = self.context.get_next_local_id();
-
-                // attempt to parse a type
-                // let type_ref: TypeRef = self.parse_type();
-
-                // we need to parse an expression for the variable
-                let next = self.tokens.first().unwrap();
-
-                // we're going to parse the expression for the variable now.
-                // let expression = self.parse_expression();
-
-                // we're done parsing the expression, so we can safely return the variable.
-                return Some(Statement::Immutable(Variable {
-                    name: variable_name,
-                    node_id: variable_id,
-                    visibility: visibility,
-                    // this is temprorary
-                    assignment: None,
-                    // this is also temporary
-                    type_ref: TypeRef { context: 0, id: 0 },
-                }));
-            }
-            _ => (),
-        };
         return None;
     }
 
-    fn parse_class_property(&mut self, visibility: Visibility) -> ClassProperty {
-        // we're going to parse a class property
-        // we expect a variable name next, so we can parse it
-        let name = self.tokens.peek().unwrap();
+    /// Parses a variable declaration (if plausible)
+    ///
+    /// For example:
+    /// - `var x = 5`
+    /// - `const x = 5`
+    fn parse_variable(&mut self) -> Option<(Variable, bool)> {
+        let decl_keyword = self.tokens.peek_if(|t| {
+            if t.kind().is_keyword() {
+                return (t.kind().as_keyword() == KeyWord::Const)
+                    || (t.kind().as_keyword() == KeyWord::Var);
+            } else {
+                return false;
+            }
+        });
 
-        if !name.kind().is_identifier() {
-            create_report!(
-                self.context,
-                name.range(),
-                format!("A class property name must follow a class property declaration."),
-                format!("Unexpected token \"{}\"", name.kind().to_string())
-            );
-        }
+        if let Some(keyword) = decl_keyword {
+            let is_constant = keyword.kind().as_keyword() == KeyWord::Const;
+            self.skip_whitespace_err("A variable name was expected but none was found.");
 
-        // we know the variable name now
-        let variable_name = name.value().unwrap().to_string();
+            // check if the next token is an indentifier
+            if let Some(identifier) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+                let mut type_node: Type;
 
-        let next = self.tokens.first().unwrap();
-
-        // we need to check if the next token is a type or not
-        // if it's the beginning of an assignment, we need to parse the expression.
-        if next.kind().is_colon() {
-            self.tokens.peek();
-            // the next few tokens are a type expression.
-            let type_data = self.parse_type_list();
-            // we're going to parse the expression for the variable now.
-            let expression: Option<Expression> = {
-                // get the next token
-                let next = self.tokens.peek().unwrap();
-                if next.kind().is_assignment() {
-                    create_report!(
-                        self.context,
-                        next.range(),
-                        format!("Expected an assignment or statement end after a class property declaration."),
-                        format!("Unexpected token \"{}\"", next.kind().to_string())
-                    );
-                    // self.parse_expression()
-                } else if next.kind().is_statement_end() {
-                    None
+                // token is an identifier!
+                // we need to check if a colon follows, if so, we need to parse a type, otherwise we can skip
+                // the type checking and just parse the variable
+                if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
+                    // now parse a type statement.
+                    if let Some(type_smt) = self.parse_type_kind() {
+                        type_node = type_smt;
+                    } else {
+                        create_report!(
+                            self.context,
+                            self.tokens.first().unwrap().range(),
+                            "Expected type statement to follow a variable declaration with a colon.".to_string(),
+                            "A type statement is expected here.".to_string()
+                        );
+                    }
                 } else {
-                    create_report!(
-                        self.context,
-                        next.range(),
-                        format!("Expected an assignment or statement end after a class property declaration."),
-                        format!("Unexpected token \"{}\"", next.kind().to_string())
-                    );
+                    type_node = Type::uninit();
                 }
-            };
 
-            // we're done parsing the expression, so we can safely return the variable.
-            return ClassProperty {
-                name: variable_name,
-                visibility: visibility,
-                // this is temprorary
-                value: expression,
-                // this is also temporary
-                type_ref: TypeRef { context: 0, id: 0 },
-            };
-        }
-        // we're going to parse the expression for the variable now.
-        // let expression = self.parse_expression();
+                // we now need an assignment operator
+                self.skip_whitespace_err("An operator was expected but none was found.");
 
-        // we're done parsing the expression, so we can safely return the variable.
-        return ClassProperty {
-            name: variable_name,
-            visibility: visibility,
-            // this is also temporary
-            type_ref: TypeRef { context: 0, id: 0 },
-            value: None,
-        };
-    }
-
-    fn parse_class_method(&mut self, visibility: Visibility) -> Statement {
-        // function statement lulz
-        let name = self.tokens.peek().unwrap();
-
-        if !name.kind().is_identifier() {
-            create_report!(
-                self.context,
-                name.range(),
-                format!("A class method name must follow a class method declaration."),
-                format!("Unexpected token \"{}\"", name.kind().to_string())
-            );
-        }
-
-        // we know the method name now
-        let method_name = name.value().unwrap().to_string();
-        // we need to assign this method a new id!
-        let method_id = self.context.get_next_local_id();
-
-        let args = self.parse_function_inputs();
-
-        dbg!(&args);
-
-        // get the scope for the method
-        let scope = self.parse_scope();
-
-        Statement::Function(Function {
-            name: method_name,
-            node_id: method_id,
-            body: scope,
-            visibility: visibility,
-            inputs: args.0,
-            outputs: args.1,
-        })
-    }
-
-    fn parse_class_body(&mut self, class: &mut Class) -> Vec<Statement> {
-        // we're expecting the next token to be a brace.
-        // if it's not, we can't parse this class as it's not a body.
-        let next = self.tokens.peek().unwrap();
-
-        if !next.kind().is_left_brace() {
-            create_report!(
-                self.context,
-                next.range(),
-                format!("A class body must follow a class declaration. You should open a body with a brace here."),
-                format!("Unexpected token \"{}\"", next.kind().to_string())
-            );
-        }
-
-        let mut statements: Vec<Statement> = Vec::new();
-
-        // now we can parse any statement until we reach the end of the class body
-        // this is the only special case where we need to specially parse a body or block of code
-        // because of how php works :rage:
-        while !self.tokens.first().unwrap().kind().is_right_brace() && !self.tokens.is_eof() {
-            let next_token = self.tokens.first().unwrap();
-            let statement: Statement = match next_token.kind() {
-                TokenType::KeyWord => {
-                    let keyword = KeyWord::from_string(&next_token.value().unwrap()).unwrap();
-
-                    if keyword.is_declarative() {
-                        self.tokens.peek();
-                        // check what kind of declaration it is
-                        // if its immutable, we can parse it, if it's not, we can't 😔
-                        if keyword == KeyWord::Const {
-                            self.parse_declaration(Visibility::Private, keyword)
-                                .unwrap()
+                // check for an "equals" operator
+                if let Some(_) = self
+                    .tokens
+                    .peek_if(|t| t.kind().is_operator() && (t.value().unwrap() == "=".to_string()))
+                {
+                    // we have an equals operator!
+                    // we need to parse an expression
+                    self.skip_whitespace_err("An expression was expected but none was found.");
+                    if let Some(expr) = self.parse_expression() {
+                        // we have an expression!
+                        // we need to parse a semicolon
+                        self.skip_whitespace_err("A semicolon was expected but none was found.");
+                        if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
+                            return Some((
+                                Variable::new(
+                                    identifier.value().unwrap(),
+                                    TypeRef::empty(),
+                                    Visibility::Private,
+                                    Some(expr),
+                                ),
+                                is_constant,
+                            ));
                         } else {
                             create_report!(
                                 self.context,
-                                next_token.range(),
-                                format!("This keyword is useless in class context."),
-                                format!(
-                                    "Useless Keyword \"{}\"",
-                                    next_token.value().unwrap().to_string()
-                                )
+                                self.tokens.first().unwrap().range(),
+                                "Expected a semicolon to follow a variable declaration."
+                                    .to_string(),
+                                "A semicolon is expected here.".to_string()
                             );
                         }
-                    } else if keyword.is_visibility() {
-                        // we're going to expect a identifier OR a declaration next, so we can parse it
-                        // however, lets consume the visibility keyword token from the stream.
-                        self.tokens.peek();
-
-                        let next_token = self.tokens.first().unwrap();
-
-                        // check if the next token is a function keyword or not
-                        if next_token.kind().is_keyword() {
-                            if KeyWord::Function
-                                == KeyWord::from_string(&next_token.value().unwrap()).unwrap()
-                            {
-                                // this a class method!
-                                self.tokens.peek();
-                                self.parse_class_method(Visibility::from_keyword(keyword))
-                            } else if keyword.is_declarative() {
-                                dbg!(&keyword);
-                                self.tokens.peek();
-                                // check what kind of declaration it is
-                                // if its immutable, we can parse it, if it's not, we can't 😔
-                                if keyword == KeyWord::Const {
-                                    self.parse_declaration(Visibility::Private, keyword)
-                                        .unwrap()
-                                } else {
-                                    create_report!(
-                                        self.context,
-                                        next_token.range(),
-                                        format!("This keyword is useless in class context."),
-                                        format!(
-                                            "Useless Keyword \"{}\"",
-                                            next_token.value().unwrap().to_string()
-                                        )
-                                    );
-                                }
-                            } else {
-                                create_report!(
-                                    self.context,
-                                    next_token.range(),
-                                    format!("One of \"const\", \"var\", \"class\", \"enum\" or \"interface\" must follow a visibilty keyword."),
-                                    format!("Unexpected {}: \"{}\"", next_token.kind().to_string(), next_token.value().unwrap().to_string())
-                                );
-                            }
-                        } else {
-                            let property =
-                                self.parse_class_property(Visibility::from_keyword(keyword));
-
-                            class.properties.push(property);
-                            continue;
-                        }
                     } else {
                         create_report!(
                             self.context,
-                            next_token.range(),
-                            format!("One of \"const\", \"var\", \"class\", \"enum\" or \"interface\" must follow a visibilty keyword."),
-                            format!("Unexpected {}: \"{}\"", next_token.kind().to_string(), next_token.value().unwrap().to_string())
+                            self.tokens.first().unwrap().range(),
+                            "Expected an expression to follow a variable declaration.".to_string(),
+                            "An expression is expected here.".to_string()
                         );
                     }
-                }
-                _ => {
-                    create_report!(
-                        self.context,
-                        next_token.range(),
-                        format!(
-                            "Illegal token in class body \"{}\"",
-                            next_token.kind().to_string()
-                        )
-                    );
-                }
-            };
-
-            // classes **can** have functions and properties, so we can parse them
-            statements.push(statement);
-        }
-
-        if self.tokens.is_eof() {
-            create_report!(
-                self.context,
-                self.tokens.prev().unwrap().range(),
-                format!("This class is never closed."),
-                format!("Unexpected end of file")
-            );
-        }
-
-        // this should never happen, but in the event it does,
-        if !self.tokens.first().unwrap().kind().is_right_brace() {
-            create_report!(
-                self.context,
-                self.tokens.prev().unwrap().range(),
-                format!("This class is never closed."),
-                format!("Unexpected end of file")
-            );
-        }
-
-        dbg!(self.tokens.peek().unwrap());
-        return statements;
-    }
-
-    fn parse_type_list(&mut self) -> Vec<TypeRef> {
-        let mut types: Vec<Type> = Vec::new();
-
-        while !self.tokens.is_eof() {
-            // check the next token
-            let tk = self.tokens.first().unwrap();
-            match tk.kind() {
-                TokenType::Identifier => {
-                    types.push(Type {
-                        name: tk.value().unwrap(),
-                        kind: TypeKind::Ref(TypeRef {
-                            context: self.context.origin,
-                            id: 0,
-                        }),
-                        id: 0,
-                    });
-                    self.tokens.peek();
-                }
-                TokenType::Operator => {
-                    if tk.value().unwrap() == "|".to_string() {
-                        self.tokens.peek();
-                        continue;
+                } else {
+                    // variables **can** be uninitialized
+                    // we need to check if the next token is an end of statement
+                    if let Some(end_of_statement) =
+                        self.tokens.peek_if(|t| t.kind().is_statement_end())
+                    {
+                        // we have an end of statement!
+                        // we can return a variable declaration
+                        return Some((
+                            Variable::new(
+                                identifier.value().unwrap(),
+                                TypeRef::empty(),
+                                Visibility::Private,
+                                None,
+                            ),
+                            is_constant,
+                        ));
                     } else {
+                        // we don't have an end of statement!
+                        // we need to report an error
                         create_report!(
                             self.context,
-                            tk.range(),
-                            format!(
-                                "Unexpected operator \"{}\" in type statement",
-                                tk.kind().to_string()
-                            )
+                            self.tokens.first().unwrap().range(),
+                            "Expected an end of statement to follow an uninitialized declaration."
+                                .to_string(),
+                            "A semi-colon is expected here.".to_string()
                         );
                     }
                 }
-                _ => break,
-            }
-        }
-
-        types
-            .into_iter()
-            .map(|t| self.context.types.make_type(t))
-            .collect()
-    }
-
-    fn parse_scope(&mut self) -> Vec<Statement> {
-        // we're expecting the next token to be a brace.
-        let tk = self.tokens.peek().unwrap();
-        let mut statements: Vec<Statement> = Vec::new();
-
-        if tk.kind().is_left_brace() {
-            // this is a bit hacky, but bare with me.
-            // we are going to parse a statement until we find a right brace.
-            while !self.tokens.first().unwrap().kind().is_right_brace() && !self.tokens.is_eof() {
-                println!("Inside scope parsing loop");
-                if let Some(stmt) = self.parse_statement() {
-                    statements.push(stmt);
-                }
-                self.tokens.peek().unwrap();
-            }
-
-            if self.tokens.is_eof() || !self.tokens.first().unwrap().kind().is_right_brace() {
+            } else {
                 create_report!(
                     self.context,
-                    self.tokens.prev().unwrap().range(),
-                    format!("This scope is never closed."),
-                    format!("Unexpected end of file")
+                    self.tokens.first().unwrap().range(),
+                    "A name must follow a variable declaration".to_string(),
+                    format!(
+                        "Unexpected token: \"{}\"",
+                        self.tokens.first().unwrap().kind().to_string()
+                    )
                 );
             }
-
-            self.tokens.peek().unwrap();
-
-            return statements;
         } else {
-            create_report!(
-                self.context,
-                self.tokens.prev().unwrap().range(),
-                format!("Expected a left brace to open this scope body."),
-                format!("Unexpected token \"{}\"", tk.kind().to_string())
-            );
+            return None;
         }
     }
 
-    fn parse_keyword() -> Option<Statement> {
+    /// Parses a type kind.
+    /// For example:
+    /// - `int`
+    /// - `string`
+    /// - `bool`
+    fn parse_type_kind(&mut self) -> Option<Type> {
         None
+    }
+
+    fn parse_expression(&mut self) -> Option<Expression> {
+        // we need to parse an expression
+        None
+    }
+
+    fn skip_whitespace_err(&mut self, err: &'static str) {
+        let start = self.tokens.first().unwrap().range().start;
+        match self.tokens.peek_until(|t| !t.kind().is_whitespace()) {
+            None => {
+                create_report!(
+                    self.context,
+                    start..self.context.source.get_contents().unwrap().len(),
+                    err.to_string()
+                );
+            }
+            _ => (),
+        }
+    }
+
+    fn skip_whitespace(&mut self) {
+        self.tokens.peek_until(|t| !t.kind().is_whitespace());
     }
 }
 

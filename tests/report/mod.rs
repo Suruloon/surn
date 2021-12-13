@@ -11,9 +11,9 @@ pub fn test_snippet_print() {
         .set_source(SourceBuffer::new(code.to_string()))
         .make_snippet(5..7, "This keyword must be spelled out.".to_string(), None)
         .make_snippet(
-            25..32,
-            "This macro could not be found.".to_string(),
-            Some("Try using print".into()),
+            34..49,
+            "String contents can not contain this message.".to_string(),
+            Some("Illegal message".into()),
         )
         .set_message("This is a test.".to_string())
         .print();

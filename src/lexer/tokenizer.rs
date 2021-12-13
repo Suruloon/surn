@@ -20,6 +20,15 @@ impl Cursor<'_> {
     fn eat(&mut self) -> Option<Token> {
         let start_pos = self.get_pos();
 
+        if let Some(spaces) = self.eat_whitespace() {
+            return token!(
+                start_pos,
+                self.get_pos(),
+                TokenType::Whitespace,
+                Some(spaces)
+            );
+        }
+
         if let Some(operator) = self.eat_operator() {
             return token!(
                 start_pos,
@@ -30,7 +39,12 @@ impl Cursor<'_> {
         }
 
         if let Some(keyword) = self.eat_keyword() {
-            return token!(start_pos, self.get_pos(), TokenType::KeyWord, Some(keyword));
+            return token!(
+                start_pos,
+                self.get_pos(),
+                TokenType::KeyWord(KeyWord::from_string(&keyword).unwrap()),
+                None
+            );
         }
 
         if let Some(boolean) = self.eat_boolean() {
@@ -57,6 +71,17 @@ impl Cursor<'_> {
 
         self.peek();
         return None;
+    }
+
+    /// This may be misleading,
+    /// because it eats ALL whitespace until a char is not whitespace
+    fn eat_whitespace(&mut self) -> Option<String> {
+        let segment = self.eat_while(|c| c.is_whitespace());
+        return if segment.is_empty() {
+            None
+        } else {
+            Some(segment)
+        };
     }
 
     fn eat_identifier(&mut self) -> Option<String> {

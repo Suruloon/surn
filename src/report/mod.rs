@@ -248,12 +248,17 @@ impl Snippet {
             )
         );
 
+        let space = format!("{} |", repeat_char(Charset::defaults().space, longest));
+
         let message = format!(
             "{} | ---> {}",
             SizedPadding::new("Err".into(), Charset::defaults(), longest),
             self.message
         );
-        format!("{} | {}\n{}\n{}", line_num, source_code, underline, message)
+        format!(
+            "{} | {}\n{}\n{}\n{}",
+            line_num, source_code, underline, space, message
+        )
     }
 }
 

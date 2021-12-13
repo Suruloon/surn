@@ -1,16 +1,16 @@
+use crate::lexer::keyword::KeyWord;
 use std::ops::Range;
-
-use super::{keyword::KeyWord, pos::Region};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     /// Any token that signifies a variable is to be created.
     ///
     /// For example:
-    /// - `assign`
-    /// - `assn`
-    /// - `stack`
-    /// - `stck`
+    /// - `const`
+    Constant,
+    /// Any token that signifies a variable is to be created.
+    /// For example:
+    /// - `var`
     Variable,
     // The operator token that is used to assign a value to a variable.
     // For example:
@@ -27,7 +27,7 @@ pub enum TokenType {
     /// - `if`
     /// - `else`
     /// - `other`
-    KeyWord,
+    KeyWord(KeyWord),
     /// A phrase is anything that is consumed and rendered "unknown"
     /// but is a phrase that is not a keyword.
     ///
@@ -58,6 +58,10 @@ pub enum TokenType {
     /// - `^`
     /// - `>`
     /// - `<`
+    /// - `=`
+    /// - `!`
+    /// - `&`
+    /// - `|`
     /// - `and`
     /// - `or`
     /// - `not`
@@ -67,6 +71,8 @@ pub enum TokenType {
     /// - `var test: bool = true;`
     /// - `var apple: bool = false;`
     Boolean,
+    /// A whitespace character is a character that is not a keyword, number, or string.
+    Whitespace,
     /// The semi-colon character that signals the end of a statement.
     ///
     /// For example:
@@ -100,7 +106,7 @@ impl TokenType {
 
     pub fn is_keyword(&self) -> bool {
         match self {
-            TokenType::KeyWord => true,
+            TokenType::KeyWord(_) => true,
             _ => false,
         }
     }
@@ -210,6 +216,13 @@ impl TokenType {
         }
     }
 
+    pub fn is_whitespace(&self) -> bool {
+        match self {
+            TokenType::Whitespace => true,
+            _ => false,
+        }
+    }
+
     pub fn is_right_brace(&self) -> bool {
         match self {
             TokenType::RightBrace => true,
@@ -223,15 +236,31 @@ impl TokenType {
             _ => false,
         }
     }
+
+    pub fn is_constant(&self) -> bool {
+        match self {
+            TokenType::Constant => true,
+            _ => false,
+        }
+    }
+
+    /// This will panic if the token type is not a keyword.
+    pub fn as_keyword(&self) -> KeyWord {
+        match self {
+            TokenType::KeyWord(keyword) => keyword.clone(),
+            _ => panic!("Token type is not a keyword but a keyword was expected."),
+        }
+    }
 }
 
 impl ToString for TokenType {
     fn to_string(&self) -> String {
         match self {
             TokenType::Variable => "Variable".to_string(),
+            TokenType::Constant => "Constant".to_string(),
             TokenType::Colon => "Colon".to_string(),
             TokenType::Comment => "Comment".to_string(),
-            TokenType::KeyWord => "KeyWord".to_string(),
+            TokenType::KeyWord(_) => "KeyWord".to_string(),
             TokenType::Identifier => "Identifier".to_string(),
             TokenType::Number => "Number".to_string(),
             TokenType::StringLiteral => "String".to_string(),
@@ -246,6 +275,7 @@ impl ToString for TokenType {
             TokenType::LeftBrace => "Opening Delimiter".to_string(),
             TokenType::RightBrace => "Closing Delimiter".to_string(),
             TokenType::Comma => "Comma".to_string(),
+            TokenType::Whitespace => "Whitespace".to_string(),
         }
     }
 }

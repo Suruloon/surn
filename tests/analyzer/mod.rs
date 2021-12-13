@@ -5,7 +5,7 @@ use surn::lexer::tokenizer::tokenize;
 
 // Tests the tokenizer with the given file.
 pub const TEST_A: &str = "tests/analyzer/test_a.surn";
-pub const error_a: &str = "tests/error.debug";
+pub const ERROR_A: &str = "tests/error.debug";
 
 #[test]
 pub fn test_analyze() {
@@ -23,6 +23,6 @@ pub fn test_analyze() {
 // print the file contents
 #[test]
 pub fn test_print() {
-    let contents = fs::read_to_string(error_a).unwrap();
+    let contents = fs::read_to_string(ERROR_A).unwrap();
     println!("{}", contents);
 }

@@ -10,6 +10,38 @@ pub trait StreamBuffer {
     /// Basically a `next` call on the iterator.
     fn peek(&mut self) -> Option<Self::Item>;
 
+    fn peek_or(&mut self, v: Self::Item) -> Self::Item {
+        self.peek().unwrap_or(v)
+    }
+
+    /// Peeks the interator until the given predicate returns true
+    /// This uses `first_if` to determine if the predicate is true
+    /// If it is, the iterator is advanced to the next item
+    fn peek_until(&mut self, f: impl Fn(&Self::Item) -> bool) -> Option<Self::Item> {
+        loop {
+            if self.is_eof() {
+                return None;
+            }
+            match self.first_if(|x| f(x)) {
+                Some(item) => {
+                    self.peek();
+                }
+                None => return Some(self.first().unwrap()),
+            };
+        }
+    }
+
+    /// Peeks the next item in the iterator if the predicate is true
+    /// Otherwise, returns None and **Does not consume** the iterator.
+    fn peek_if(&mut self, f: impl FnOnce(&Self::Item) -> bool) -> Option<Self::Item> {
+        if let Some(tk) = self.first_if(f) {
+            self.peek();
+            Some(tk)
+        } else {
+            None
+        }
+    }
+
     /// Peeks the `n` times in the iterator
     fn peek_inc(&mut self, n: usize) {
         for _ in 0..n {
@@ -30,11 +62,41 @@ pub trait StreamBuffer {
     /// Returns the first item in the buffer without removing it.
     fn first(&self) -> Option<Self::Item>;
 
+    /// Returns the first item in the buffer without removing it or a default value.
+    fn first_or(&self, v: Self::Item) -> Self::Item {
+        self.first().unwrap_or(v)
+    }
+
+    /// Returns the first item in the buffer without removing it only if the predicate is true.
+    fn first_if(&self, f: impl FnOnce(&Self::Item) -> bool) -> Option<Self::Item> {
+        self.first().filter(|i| f(i))
+    }
+
     /// Returns the second item in the buffer without removing it.
     fn second(&self) -> Option<Self::Item>;
 
+    fn second_or(&self, v: Self::Item) -> Self::Item {
+        self.second().unwrap_or(v)
+    }
+
+    /// Returns the second item in the buffer without removing it only if the predicate is true.
+    fn second_if(&self, f: impl FnOnce(&Self::Item) -> bool) -> Option<Self::Item> {
+        self.second().filter(|i| f(i))
+    }
+
     /// Gets the `nth` item of the buffer without consuming it.
     fn nth(&self, n: usize) -> Option<Self::Item>;
+
+    /// Gets the `nth` item of the buffer without consuming it or a default value.
+    fn nth_or(&self, n: usize, v: Self::Item) -> Self::Item {
+        self.nth(n).unwrap_or(v)
+    }
+
+    /// Gets the `nth` item of the buffer without consuming it only if the predicate is true.
+    /// If the predicate is false, it will return `None`.
+    fn nth_if(&self, n: usize, f: impl FnOnce(&Self::Item) -> bool) -> Option<Self::Item> {
+        self.nth(n).filter(|i| f(i))
+    }
 
     /// Returns a copy of the buffer without consuming it.
     fn items(&self) -> Vec<Self::Item>;
