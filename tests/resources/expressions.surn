@@ -1,0 +1,5 @@
+var x = function_call(10, x);
+var apple = {
+    test: 10
+};
+var arr: number = 10;

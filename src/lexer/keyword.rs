@@ -26,6 +26,26 @@ pub enum KeyWord {
     Private,
     /// `prot` - Protected visibility.
     Protected,
+    /// `static` - Static variable.
+    Static,
+    /// `return` - Return statement.
+    Return,
+    /// `break` - Break statement.
+    Break,
+    /// `continue` - Continue statement.
+    Continue,
+    /// `for` - For loop.
+    For,
+    /// `while` - While loop.
+    While,
+    /// `do` - Do loop.
+    Do,
+    /// `new` - New expression.
+    New,
+    /// `drop` - Drop expression.
+    Drop,
+    /// `use` - Use statement.
+    Use,
 }
 
 impl KeyWord {
@@ -43,6 +63,16 @@ impl KeyWord {
             "pub" => Some(KeyWord::Public),
             "priv" => Some(KeyWord::Private),
             "prot" => Some(KeyWord::Protected),
+            "static" => Some(KeyWord::Static),
+            "return" => Some(KeyWord::Return),
+            "break" => Some(KeyWord::Break),
+            "continue" => Some(KeyWord::Continue),
+            "for" => Some(KeyWord::For),
+            "while" => Some(KeyWord::While),
+            "do" => Some(KeyWord::Do),
+            "new" => Some(KeyWord::New),
+            "drop" => Some(KeyWord::Drop),
+            "use" => Some(KeyWord::Use),
             _ => None,
         }
     }
@@ -61,6 +91,16 @@ impl KeyWord {
             KeyWord::Public => "pub".to_string(),
             KeyWord::Private => "priv".to_string(),
             KeyWord::Protected => "prot".to_string(),
+            KeyWord::Static => "static".to_string(),
+            KeyWord::Return => "return".to_string(),
+            KeyWord::Break => "break".to_string(),
+            KeyWord::Continue => "continue".to_string(),
+            KeyWord::For => "for".to_string(),
+            KeyWord::While => "while".to_string(),
+            KeyWord::Do => "do".to_string(),
+            KeyWord::New => "new".to_string(),
+            KeyWord::Drop => "drop".to_string(),
+            KeyWord::Use => "use".to_string(),
         }
     }
 

@@ -22,8 +22,8 @@ pub trait StreamBuffer {
             if self.is_eof() {
                 return None;
             }
-            match self.first_if(|x| f(x)) {
-                Some(item) => {
+            match self.first_if(|x| !f(x)) {
+                Some(_) => {
                     self.peek();
                 }
                 None => return Some(self.first().unwrap()),

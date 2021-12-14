@@ -1,4 +1,4 @@
-use std::{ops::Range, str::Chars};
+use std::str::Chars;
 
 pub const END_OF_FILE: char = '\0';
 
@@ -121,6 +121,6 @@ impl<'a> Cursor<'a> {
     }
 }
 
-fn is_line_ending(c: char) -> bool {
+pub fn is_line_ending(c: char) -> bool {
     c == '\n'
 }

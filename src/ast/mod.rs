@@ -1,4 +1,7 @@
-use crate::{lexer::keyword::KeyWord, types::TypeRef};
+use crate::{
+    lexer::{keyword::KeyWord, token::Token},
+    types::TypeRef,
+};
 
 use self::ops::AnyOperation;
 pub mod ops;
@@ -21,6 +24,10 @@ pub enum Expression {
     /// For example:
     /// - `x.method()`
     MethodCall(MethodCall),
+    /// A new instance of a type.
+    /// For example:
+    /// - `new SomeType()`
+    New(NewCall),
     /// An array literal.
     ///
     /// For example:
@@ -65,16 +72,30 @@ pub struct Literal {
     pub type_node: Option<TypeRef>,
 }
 
+impl Literal {
+    pub fn new(value: String, type_node: Option<TypeRef>) -> Self {
+        Self { value, type_node }
+    }
+}
+
 /// A member list is a list of members.
 /// For example:
 /// - `x.y`
-///
-/// The `name` is the value of the last member.
-/// The `origin` is the value that the prop is coming from.
 #[derive(Debug, Clone)]
 pub struct MemberListNode {
-    pub name: String,
-    pub origin: Box<Expression>,
+    /// The `name` is the value of the last member or the "property" being accessed. eg: `y` in `x.y`
+    pub name: Box<Expression>,
+    /// The `origin` is the value that the prop is coming from or the "name" of the initial eg: `x` in `x.y`.
+    pub origin: Token,
+}
+
+impl MemberListNode {
+    pub fn new(name: Expression, origin: Token) -> MemberListNode {
+        MemberListNode {
+            name: Box::new(name),
+            origin,
+        }
+    }
 }
 
 /// An array literal. This represents an array of values.
@@ -88,6 +109,12 @@ pub struct Array {
     pub type_node: Option<TypeRef>,
 }
 
+impl Array {
+    pub fn new(values: Vec<Expression>, type_node: Option<TypeRef>) -> Array {
+        Array { values, type_node }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Object {
     /// The properties of the object.
@@ -98,6 +125,22 @@ pub struct Object {
     pub type_node: Option<TypeRef>,
 }
 
+impl Object {
+    pub fn new(properties: Vec<ObjectProperty>, type_node: Option<TypeRef>) -> Object {
+        Object {
+            properties,
+            type_node,
+        }
+    }
+
+    pub fn empty() -> Object {
+        Object {
+            properties: Vec::new(),
+            type_node: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ObjectProperty {
     /// The name of the property.
@@ -106,6 +149,11 @@ pub struct ObjectProperty {
     pub value: Expression,
 }
 
+impl ObjectProperty {
+    pub fn new(name: String, value: Expression) -> ObjectProperty {
+        ObjectProperty { name, value }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct Operation {
     pub left: Box<Expression>,
@@ -384,6 +432,30 @@ pub struct Call {
     pub name: String,
     /// The arugments being passed to the function.
     pub arguments: Vec<Expression>,
+}
+
+impl Call {
+    pub fn new(name: String, arguments: Vec<Expression>) -> Self {
+        Call { name, arguments }
+    }
+}
+
+/// A `new` call.
+/// This is calling a constructor.
+/// For example:
+/// - `new Foo()`
+#[derive(Debug, Clone)]
+pub struct NewCall {
+    /// The name of the class being constructed.
+    pub name: String,
+    /// The arugments being passed to the constructor.
+    pub arguments: Vec<Expression>,
+}
+
+impl NewCall {
+    pub fn new(name: String, arguments: Vec<Expression>) -> Self {
+        NewCall { name, arguments }
+    }
 }
 
 /// A method call.

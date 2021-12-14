@@ -4,8 +4,8 @@ use surn::lexer::analysis::analyze;
 use surn::lexer::tokenizer::tokenize;
 
 // Tests the tokenizer with the given file.
-pub const TEST_A: &str = "tests/analyzer/test_a.surn";
-pub const ERROR_A: &str = "tests/error.debug";
+pub const TEST_A: &str = "tests/resources/test_a.surn";
+pub const ERROR_A: &str = "tests/resources/error.debug";
 
 #[test]
 pub fn test_analyze() {

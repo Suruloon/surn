@@ -38,7 +38,11 @@ impl SourceLine {
 
         // get the offset based on the amount that was trimmed off.
         let trimmed_amt = self.len() - trimmed.len();
-        let start = relative.start - trimmed_amt;
+        let start = if relative.start < trimmed_amt {
+            0
+        } else {
+            relative.start - trimmed_amt
+        };
         start + 1
     }
 

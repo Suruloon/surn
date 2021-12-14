@@ -3,7 +3,7 @@ use std::fs;
 use surn::lexer::{token::TokenType, tokenizer::tokenize};
 
 // Tests the tokenizer with the given file.
-pub const TEST_A: &str = "tests/tokenize/test_a.surn";
+pub const TEST_A: &str = "tests/resources/test_a.surn";
 
 #[test]
 pub fn test_tokenizer() {

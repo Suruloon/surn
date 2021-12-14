@@ -139,7 +139,7 @@ impl TokenType {
         }
     }
 
-    pub fn is_string_literal(&self) -> bool {
+    pub fn is_string(&self) -> bool {
         match self {
             TokenType::StringLiteral => true,
             _ => false,

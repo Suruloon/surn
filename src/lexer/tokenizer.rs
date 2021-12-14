@@ -1,9 +1,6 @@
 use super::{
     keyword::{KeyWord, MAX_KEYWORD_LENGTH},
-    pos::{
-        cursor::{Cursor, END_OF_FILE},
-        Region,
-    },
+    pos::cursor::{Cursor, END_OF_FILE},
     token::{Token, TokenType},
 };
 
@@ -59,6 +56,7 @@ impl Cursor<'_> {
                 Some(identifier)
             );
         }
+
         if let Some(number) = self.eat_number() {
             return token!(start_pos, self.get_pos(), TokenType::Number, Some(number));
         }
@@ -67,6 +65,15 @@ impl Cursor<'_> {
             // Peek if a reserved character is found
             self.peek();
             return token!(start_pos, self.get_pos(), token_type);
+        }
+
+        if let Some(string) = self.eat_string() {
+            return token!(
+                start_pos,
+                self.get_pos(),
+                TokenType::StringLiteral,
+                Some(string)
+            );
         }
 
         self.peek();
@@ -174,6 +181,15 @@ impl Cursor<'_> {
             }
         }
         return None;
+    }
+
+    fn eat_string(&mut self) -> Option<String> {
+        if self.first() != '"' || self.first() != '\'' || self.first() != '`' {
+            return None;
+        } else {
+            let first = self.first();
+            return Some(self.eat_while(|c| c != first));
+        }
     }
 
     fn eat_reserved(&mut self) -> Option<TokenType> {
