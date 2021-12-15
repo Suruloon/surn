@@ -4,7 +4,7 @@ use crate::{
     ast::{
         Array, AstBody, Call, Class, ClassProperty, Expression, Function, FunctionInput, Literal,
         MemberListNode, MemberLookup, NewCall, Object, ObjectProperty, Operation, Statement,
-        Variable, Visibility,
+        Static, Variable, Visibility,
     },
     lexer::{
         analysis::analyze,
@@ -116,9 +116,13 @@ impl AstGenerator {
 
     /// A statement can be a variable declaration, function declaration, class declaration, etc.
     fn parse_statement(&mut self) -> Option<Statement> {
-        // because we're making this top level, we can parse all statements in the global context.
+        // Try to parse a static statement (this is obsolete in global context, but can exist)
+        // this is transpiled to a GLOBALS class.
+        if let Some(stmt) = self.parse_static() {
+            return Some(stmt);
+        }
 
-        // try to parse a mutable variable.
+        // try to parse a mutable or constant variable.
         if let Some((var, constant)) = self.parse_variable() {
             if constant {
                 return Some(Statement::Const(var));
@@ -127,7 +131,68 @@ impl AstGenerator {
             }
         }
 
+        // try to parse a function declaration
+        if let Some(func) = self.parse_function() {
+            return Some(Statement::Function(func));
+        }
+
         return None;
+    }
+
+    /// Parses a static statement (if plausible).
+    /// A static statement can only be declared in classes and will be checked after initial parsing.
+    fn parse_static(&mut self) -> Option<Statement> {
+        // We actually can't parse visibility here, because a static statement may not exist, however,
+        // we will parse it later, if visibility is present.
+        if let Some(_) = self
+            .tokens
+            .first_if(|t| t.kind().is_keyword() && t.kind().as_keyword().is_visibility())
+        {
+            // We have a keyword however we need to make sure we have a static keyword next.
+            if let Some(_) = self
+                .tokens
+                .second_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Static))
+            {
+                let visibility = self.parse_visibility().unwrap();
+                self.tokens.peek();
+                self.skip_whitespace();
+                // We have a static keyword, so we can parse the rest of the statement.
+                if let Some(stmt) = self.parse_statement() {
+                    return Some(Statement::Static(Static::new(visibility, stmt)));
+                } else {
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        format!("Expected a statement after a static keyword, but found none."),
+                        format!("A statement was expected here.")
+                    );
+                }
+            } else {
+                return None;
+            }
+        }
+
+        // check if we have a static keyword!
+        if let Some(_) = self
+            .tokens
+            .first_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Static))
+        {
+            self.tokens.peek();
+            self.skip_whitespace();
+            // We have a static keyword, so we can parse the rest of the statement.
+            if let Some(stmt) = self.parse_statement() {
+                return Some(Statement::Static(Static::new(Visibility::Private, stmt)));
+            } else {
+                create_report!(
+                    self.context,
+                    self.tokens.first().unwrap().range(),
+                    format!("Expected a statement after a static keyword, but found none."),
+                    format!("A statement was expected here.")
+                );
+            }
+        } else {
+            return None;
+        }
     }
 
     /// Parses a variable declaration (if plausible)
@@ -136,6 +201,8 @@ impl AstGenerator {
     /// - `var x = 5`
     /// - `const x = 5`
     fn parse_variable(&mut self) -> Option<(Variable, bool)> {
+        // check for visibility
+        let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
         let decl_keyword = self.tokens.peek_if(|t| {
             if t.kind().is_keyword() {
                 return (t.kind().as_keyword() == KeyWord::Const)
@@ -192,7 +259,7 @@ impl AstGenerator {
                                 Variable::new(
                                     identifier.value().unwrap(),
                                     TypeRef::empty(),
-                                    Visibility::Private,
+                                    visibility,
                                     Some(expr),
                                 ),
                                 is_constant,
@@ -224,7 +291,7 @@ impl AstGenerator {
                             Variable::new(
                                 identifier.value().unwrap(),
                                 TypeRef::empty(),
-                                Visibility::Private,
+                                visibility,
                                 None,
                             ),
                             is_constant,
@@ -252,6 +319,187 @@ impl AstGenerator {
                     )
                 );
             }
+        } else {
+            return None;
+        }
+    }
+
+    /// Parses a function declaration
+    ///
+    /// For example:
+    /// - `function foo() {}`
+    /// - `function foo(x, y) {}`
+    /// - `function foo(x, y): int {}`
+    fn parse_function(&mut self) -> Option<Function> {
+        if let Some(_) = self
+            .tokens
+            .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Function))
+        {
+            let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
+            let mut name: Option<String> = None;
+            self.skip_whitespace_err("A function input list was expected but none was found.");
+            if let Some(n) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+                // we have a function name.
+                // we need to parse the input list
+                name = n.value();
+            }
+
+            // we need to parse the input list
+            self.skip_whitespace_err("A function input list was expected but none was found.");
+            if let Some((inputs, outputs)) = self.parse_function_inputs() {
+                // we need a block now.
+                self.skip_whitespace_err("A block was expected but none was found.");
+                if let Some(block) = self.parse_block() {
+                    return Some(Function {
+                        name,
+                        inputs,
+                        outputs,
+                        body: block,
+                        visibility: Visibility::Public,
+                        node_id: 0,
+                    });
+                } else {
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        "Expected a block to follow a function declaration.".to_string(),
+                        "A block is expected here.".to_string()
+                    );
+                }
+            } else {
+                create_report!(
+                    self.context,
+                    self.tokens.first().unwrap().range(),
+                    "Expected a function input list to follow a function declaration.".to_string(),
+                    "A function input list is expected here.".to_string()
+                );
+            }
+        }
+        return None;
+    }
+
+    fn parse_function_inputs(&mut self) -> Option<(Vec<FunctionInput>, Vec<TypeRef>)> {
+        if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_parenthesis()) {
+            let mut inputs: Vec<FunctionInput> = Vec::new();
+            let mut returns: Vec<TypeRef> = Vec::new();
+            while !self.tokens.is_eof() {
+                self.skip_whitespace_err("Function declaration arguments must be closed.");
+                if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_parenthesis()) {
+                    // we can't actually return here because we still need to parse the function body
+                    // as well as the return type
+                    break;
+                } else if let Some(param_name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+                    // we have an identifier!
+                    // we need to check if a colon follows, if so, we need to parse a type, otherwise we can skip
+                    // the type checking and just parse the variable
+                    self.skip_whitespace_err(
+                        "Expected a type statement after a function argument declaration.",
+                    );
+                    if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
+                        // now parse a type statement.
+                        if let Some(type_smt) = self.parse_type_kind() {
+                            // we have a type!
+                            // we need to parse a comma
+                            self.skip_whitespace_err("A comma was expected but none was found.");
+                            if let Some(_) = self.tokens.peek_if(|t| t.kind().is_comma()) {
+                                // we have a comma!
+                                // we need to parse another argument
+                                inputs.push(FunctionInput::new(
+                                    param_name.value().unwrap_or("".to_string()),
+                                ));
+                            } else {
+                                // we don't have a comma!
+                                // we should check if a right parentises follows now
+                                if let Some(_) =
+                                    self.tokens.peek_if(|t| t.kind().is_right_parenthesis())
+                                {
+                                    inputs.push(FunctionInput::new(param_name.value().unwrap()));
+                                    break;
+                                } else {
+                                    // we don't have a right parenthesis!
+                                    // we need to report an error
+                                    create_report!(
+                                        self.context,
+                                        self.tokens.first().unwrap().range(),
+                                        "Expected a right parenthesis to follow a function argument declaration.".to_string(),
+                                        "A right parenthesis is expected here.".to_string()
+                                    );
+                                }
+                            }
+                        } else {
+                            create_report!(
+                                self.context,
+                                self.tokens.first().unwrap().range(),
+                                "Expected a type statement to follow a function declaration argument.".to_string(),
+                                "A type statement is expected here.".to_string()
+                            );
+                        }
+                    } else {
+                        create_report!(
+                            self.context,
+                            self.tokens.first().unwrap().range(),
+                            "Expected a type statement to follow a function declaration argument."
+                                .to_string(),
+                            "A type statement is expected here.".to_string()
+                        );
+                    }
+                } else {
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        "Expected a function parameter name but none was found.".to_string(),
+                        "A name is expected here.".to_string()
+                    );
+                }
+            }
+
+            // we're outside the function input list now, we need to check for a colon, again
+            // if there is none, "void" is assumed
+            if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
+                // we need to parse a type statement
+                self.skip_whitespace_err(
+                    "Expected a return type statement after a function declaration.",
+                );
+                if let Some(type_smt) = self.parse_type_kind() {
+                    // todo: Push the type statement to the return type list
+                } else {
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        "Expected a return type statement to follow a function declaration."
+                            .to_string(),
+                        "A return type is expected here.".to_string()
+                    );
+                }
+            }
+
+            return Some((inputs, returns));
+        }
+        return None;
+    }
+
+    /// Parses any block statement
+    /// A block statement is a statement that is surrounded by curly braces
+    /// However, this does not include class bodies, as they have special properties.
+    fn parse_block(&mut self) -> Option<Vec<Statement>> {
+        return None;
+    }
+
+    /// Parses a visibility keyword
+    /// If a `static` keyword follows the visibility, the statement SHOULD be static.
+    /// > This is an alias for `parse_statement` as it will only parse visibility and static statements.
+    /// EG: `public`
+    /// EG: `private static`
+    fn parse_visibility(&mut self) -> Option<Visibility> {
+        if let Some(modifier) = self
+            .tokens
+            .peek_if(|t| t.kind().is_keyword() && t.kind().as_keyword().is_visibility())
+        {
+            let visibility = Visibility::from_keyword(modifier.kind().as_keyword());
+
+            self.skip_whitespace_err("A statement or static keyword was expected after a visibility modifier but none was found.");
+
+            return Some(visibility);
         } else {
             return None;
         }

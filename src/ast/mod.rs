@@ -202,7 +202,7 @@ pub enum Statement {
     /// A const statement.
     Const(Variable),
     /// A static statement.
-    Static(Box<Statement>),
+    Static(Static),
     /// A function declaration.
     Function(Function),
     /// A class declaration.
@@ -286,7 +286,7 @@ impl Statement {
         }
     }
 
-    pub fn get_static(&self) -> Option<Box<Statement>> {
+    pub fn get_static(&self) -> Option<Static> {
         match self {
             Statement::Static(s) => Some(s.clone()),
             _ => None,
@@ -385,6 +385,21 @@ impl Visibility {
 }
 //}}
 
+#[derive(Debug, Clone)]
+pub struct Static {
+    pub visibility: Visibility,
+    pub statement: Box<Statement>,
+}
+
+impl Static {
+    pub fn new(visibility: Visibility, statement: Statement) -> Static {
+        Static {
+            visibility,
+            statement: Box::new(statement),
+        }
+    }
+}
+
 // Classes {{
 #[derive(Debug, Clone)]
 pub struct Class {
@@ -426,7 +441,7 @@ pub enum ClassBody {}
 #[derive(Debug, Clone)]
 pub struct Function {
     /// The name of the function.
-    pub name: String,
+    pub name: Option<String>,
     /// The arguments to the function.
     pub inputs: Vec<FunctionInput>,
     /// The body of the function,
@@ -443,6 +458,15 @@ pub struct Function {
 pub struct FunctionInput {
     pub name: String,
     pub types: Vec<TypeRef>,
+}
+
+impl FunctionInput {
+    pub fn new(name: String) -> Self {
+        FunctionInput {
+            name,
+            types: Vec::new(),
+        }
+    }
 }
 
 /// A function call or method call.
