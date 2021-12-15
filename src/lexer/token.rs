@@ -66,6 +66,16 @@ pub enum TokenType {
     /// - `or`
     /// - `not`
     Operator,
+    /// An accessor is a character that accesses a value.
+    /// For example:
+    /// - `.`
+    /// - `::`
+    /// - `->`
+    Accessor,
+    /// A range token.
+    /// For example:
+    /// - `..`
+    Range,
     /// The keywords `true` and `false` are used to represent boolean values.
     /// For example:
     /// - `var test: bool = true;`
@@ -244,6 +254,20 @@ impl TokenType {
         }
     }
 
+    pub fn is_accessor(&self) -> bool {
+        match self {
+            TokenType::Accessor => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_range(&self) -> bool {
+        match self {
+            TokenType::Range => true,
+            _ => false,
+        }
+    }
+
     /// This will panic if the token type is not a keyword.
     pub fn as_keyword(&self) -> KeyWord {
         match self {
@@ -276,6 +300,8 @@ impl ToString for TokenType {
             TokenType::RightBrace => "Closing Delimiter".to_string(),
             TokenType::Comma => "Comma".to_string(),
             TokenType::Whitespace => "Whitespace".to_string(),
+            TokenType::Accessor => "Accessor".to_string(),
+            TokenType::Range => "Range".to_string(),
         }
     }
 }

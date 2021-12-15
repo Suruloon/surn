@@ -61,19 +61,24 @@ impl Cursor<'_> {
             return token!(start_pos, self.get_pos(), TokenType::Number, Some(number));
         }
 
-        if let Some(token_type) = self.eat_reserved() {
-            // Peek if a reserved character is found
-            self.peek();
-            return token!(start_pos, self.get_pos(), token_type);
-        }
-
         if let Some(string) = self.eat_string() {
+            self.peek(); // what?
             return token!(
                 start_pos,
                 self.get_pos(),
                 TokenType::StringLiteral,
                 Some(string)
             );
+        }
+
+        if let Some(token_type) = self.eat_value_reserved() {
+            return token!(start_pos, self.get_pos(), token_type.0, Some(token_type.1));
+        }
+
+        if let Some(token_type) = self.eat_reserved() {
+            // Peek if a reserved character is found
+            self.peek();
+            return token!(start_pos, self.get_pos(), token_type);
         }
 
         self.peek();
@@ -103,7 +108,9 @@ impl Cursor<'_> {
 
     fn eat_number(&mut self) -> Option<String> {
         match self.first() {
-            '.' | '0'..='9' => Some(self.eat_while(|c: char| c.is_digit(10) || c == '.')),
+            // there is an issue with leading floats where they are parsed as accessors right now.
+            // we should leave this to the parser.
+            '0'..='9' => Some(self.eat_while(|c: char| c.is_digit(10) || c == '.')),
             _ => None,
         }
     }
@@ -184,11 +191,35 @@ impl Cursor<'_> {
     }
 
     fn eat_string(&mut self) -> Option<String> {
-        if self.first() != '"' || self.first() != '\'' || self.first() != '`' {
+        if self.first() != '"' && self.first() != '\'' && self.first() != '`' {
             return None;
         } else {
-            let first = self.first();
+            let first = self.peek().unwrap();
             return Some(self.eat_while(|c| c != first));
+        }
+    }
+
+    fn eat_value_reserved(&mut self) -> Option<(TokenType, String)> {
+        match self.first() {
+            ':' => {
+                if self.second() == ':' {
+                    self.peek_inc(2);
+                    return Some((TokenType::Accessor, "::".to_string()));
+                } else {
+                    self.peek();
+                    return Some((TokenType::Colon, ":".to_string()));
+                }
+            }
+            '.' => {
+                if self.second() == '.' {
+                    self.peek_inc(2);
+                    return Some((TokenType::Range, "..".to_string()));
+                } else {
+                    self.peek();
+                    return Some((TokenType::Accessor, ".".to_string()));
+                }
+            }
+            _ => None,
         }
     }
 
@@ -200,7 +231,6 @@ impl Cursor<'_> {
             ')' => Some(TokenType::RightParenthesis),
             '{' => Some(TokenType::LeftBrace),
             '}' => Some(TokenType::RightBrace),
-            ':' => Some(TokenType::Colon),
             ';' => Some(TokenType::StatementEnd),
             ',' => Some(TokenType::Comma),
             _ => None,

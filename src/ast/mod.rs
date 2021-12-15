@@ -78,6 +78,27 @@ impl Literal {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum MemberLookup {
+    /// A Static member lookup.
+    /// For example:
+    /// - `SomeType::static_member`
+    Static,
+    /// A Member lookup.
+    /// For example:
+    /// - `x.member`
+    Dynamic,
+    /// An Index lookup.
+    /// While this is technically a member lookup, it is not a member of the
+    /// object, but rather an index lookup.
+    ///
+    /// > This can only be used for array indexing.
+    /// For example:
+    /// - `x[y]`
+    /// - `x[y][z]`
+    Index,
+}
+
 /// A member list is a list of members.
 /// For example:
 /// - `x.y`
@@ -87,13 +108,16 @@ pub struct MemberListNode {
     pub name: Box<Expression>,
     /// The `origin` is the value that the prop is coming from or the "name" of the initial eg: `x` in `x.y`.
     pub origin: Token,
+    /// The `lookup` is the type of access it is, eg whether or not it's a static or dynamic access.
+    pub lookup: MemberLookup,
 }
 
 impl MemberListNode {
-    pub fn new(name: Expression, origin: Token) -> MemberListNode {
+    pub fn new(name: Expression, origin: Token, lookup: MemberLookup) -> MemberListNode {
         MemberListNode {
             name: Box::new(name),
             origin,
+            lookup,
         }
     }
 }

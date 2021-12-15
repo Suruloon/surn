@@ -3,8 +3,8 @@ use std::process;
 use crate::{
     ast::{
         Array, AstBody, Call, Class, ClassProperty, Expression, Function, FunctionInput, Literal,
-        MemberListNode, NewCall, Object, ObjectProperty, Operation, Statement, Variable,
-        Visibility,
+        MemberListNode, MemberLookup, NewCall, Object, ObjectProperty, Operation, Statement,
+        Variable, Visibility,
     },
     lexer::{
         analysis::analyze,
@@ -340,16 +340,25 @@ impl AstGenerator {
             // we have an identifier, we need to try to parse member expressions now.
             // we need to verify that this is a member expression
             // we need to check if the next token is a period
-            if let Some(_) = self
-                .tokens
-                .second_if(|t| t.kind().is_operator() && (t.value().unwrap() == ".".to_string()))
-            {
+
+            if let Some(accessor) = self.tokens.second_if(|t| t.kind().is_accessor()) {
+                let access_kind = match accessor.value().unwrap().as_str() {
+                    "." => MemberLookup::Dynamic,
+                    "::" => MemberLookup::Static,
+                    _ => unreachable!(),
+                };
+
                 self.tokens.peek_inc(2);
                 // we have a period, we need to parse a member expression
                 // we need to parse a member expression
                 if let Some(member_expr) = self.parse_expression() {
                     // we have a member expression, we need to create a member list node
-                    return Some(MemberListNode::new(member_expr, identifier.clone()));
+                    println!("Parsed a member node!!");
+                    return Some(MemberListNode::new(
+                        member_expr,
+                        identifier.clone(),
+                        access_kind,
+                    ));
                 } else {
                     // we don't have a member expression, we need to report an error
                     create_report!(
@@ -371,7 +380,7 @@ impl AstGenerator {
     fn parse_new_expression(&mut self) -> Option<NewCall> {
         if let Some(_) = self
             .tokens
-            .first_if(|t| t.kind().is_keyword() && (t.value().unwrap() == "new".to_string()))
+            .first_if(|t| t.kind().is_keyword() && t.kind().as_keyword().is_new())
         {
             // we have a new keyword, we need to parse a name.
             if let Some(name) = self.tokens.second_if(|t| t.kind().is_identifier()) {
@@ -566,6 +575,7 @@ impl AstGenerator {
                         // otherwise error
                         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_parenthesis()) {
                             // we have a right parenthesis, we can return the inputs
+                            inputs.push(expr);
                             return Some(inputs);
                         } else {
                             create_report!(

@@ -1,4 +1,4 @@
-pub const MAX_KEYWORD_LENGTH: usize = 5;
+pub const MAX_KEYWORD_LENGTH: usize = 10;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum KeyWord {
@@ -125,6 +125,13 @@ impl KeyWord {
     pub fn is_control(&self) -> bool {
         match self {
             KeyWord::If | KeyWord::Else => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_new(&self) -> bool {
+        match self {
+            KeyWord::New => true,
             _ => false,
         }
     }
