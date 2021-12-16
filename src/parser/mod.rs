@@ -1,10 +1,13 @@
-use std::process;
+use std::{
+    process,
+    thread::{__FastLocalKeyInner, __OsLocalKeyInner},
+};
 
 use crate::{
     ast::{
         Array, AstBody, Call, Class, ClassProperty, Expression, Function, FunctionInput, Literal,
-        MemberListNode, MemberLookup, NewCall, Object, ObjectProperty, Operation, Statement,
-        Static, Variable, Visibility,
+        MemberListNode, MemberLookup, Namespace, NewCall, Object, ObjectProperty, Operation, Path,
+        Statement, Static, Variable, Visibility,
     },
     lexer::{
         analysis::analyze,
@@ -116,6 +119,10 @@ impl AstGenerator {
 
     /// A statement can be a variable declaration, function declaration, class declaration, etc.
     fn parse_statement(&mut self) -> Option<Statement> {
+        if let Some(namespace) = self.parse_namespace() {
+            return Some(Statement::Namespace(namespace));
+        }
+
         // Try to parse a static statement (this is obsolete in global context, but can exist)
         // this is transpiled to a GLOBALS class.
         if let Some(stmt) = self.parse_static() {
@@ -136,6 +143,62 @@ impl AstGenerator {
             return Some(Statement::Function(func));
         }
 
+        if let Some(class) = self.parse_class() {
+            return Some(Statement::Class(class));
+        }
+
+        return None;
+    }
+
+    fn parse_namespace(&mut self) -> Option<Namespace> {
+        if let Some(_) = self
+            .tokens
+            .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Namespace))
+        {
+            let mut path: Vec<String> = Vec::new();
+            self.skip_whitespace();
+            if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+                // we need to parse a path now.
+                loop {
+                    if let Some(_) = self.tokens.peek_if(|t| t.kind().is_backslash()) {
+                        if let Some(ident) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+                            path.push(ident.kind().to_string());
+                        } else {
+                            create_report!(
+                                self.context,
+                                self.tokens.first().unwrap().range(),
+                                "Expected identifier after backslash.".to_string()
+                            );
+                        }
+                    } else if let Some(_) = self.tokens.first_if(|t| t.kind().is_left_brace()) {
+                        if let Some(block) = self.parse_block() {
+                            return Some(Namespace {
+                                path: Path::from(name.value().unwrap(), path),
+                                body: Some(Box::new(Statement::Block(block))),
+                            });
+                        }
+                    } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
+                        break;
+                    } else {
+                        create_report!(
+                            self.context,
+                            self.tokens.first().unwrap().range(),
+                            "Unable to parse namespace path.".to_string(),
+                            format!(
+                                "Unexpected token: {}",
+                                self.tokens.peek().unwrap().kind().to_string()
+                            )
+                        );
+                    }
+                }
+            } else {
+                create_report!(
+                    self.context,
+                    self.tokens.first().unwrap().range(),
+                    "Expected a namespace name.".to_string()
+                );
+            }
+        }
         return None;
     }
 
@@ -354,7 +417,7 @@ impl AstGenerator {
                         name,
                         inputs,
                         outputs,
-                        body: block,
+                        body: Box::new(Statement::Block(block)),
                         visibility: Visibility::Public,
                         node_id: 0,
                     });
@@ -478,11 +541,72 @@ impl AstGenerator {
         return None;
     }
 
+    /// Parses any class declaration.
+    fn parse_class(&mut self) -> Option<Class> {
+        if let Some(_) = self
+            .tokens
+            .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Class))
+        {
+            self.skip_whitespace();
+            if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+                let mut extends: Vec<Path> = Vec::new();
+                let mut implements: Vec<Path> = Vec::new();
+
+                return None;
+            } else {
+                create_report!(
+                    self.context,
+                    self.tokens.first().unwrap().range(),
+                    "Expected a class name but none was found.".to_string(),
+                    format!(
+                        "Unexpected token: {}",
+                        self.tokens.first().unwrap().kind().to_string()
+                    )
+                );
+            }
+        } else {
+            return None;
+        }
+    }
+
+    fn parse_class_extension(&mut self) -> Option<Vec<Path>> {}
+
+    fn parse_class_property(&mut self) -> Option<ClassProperty> {
+        return None;
+    }
+
     /// Parses any block statement
     /// A block statement is a statement that is surrounded by curly braces
     /// However, this does not include class bodies, as they have special properties.
-    fn parse_block(&mut self) -> Option<Vec<Statement>> {
-        return None;
+    fn parse_block(&mut self) -> Option<Vec<Expression>> {
+        // we're expecting the next token to be a brace
+        if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_brace()) {
+            // we have a brace!
+            // we need to parse the statements inside the block
+            let mut expressions: Vec<Expression> = Vec::new();
+            while !self.tokens.is_eof() {
+                self.skip_whitespace_err("Expected a statement to follow a block.");
+                if let Some(expr) = self.parse_expression() {
+                    expressions.push(expr);
+                } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_brace()) {
+                    // we have a right brace!
+                    // this is the end of the block.
+                    break;
+                } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
+                    expressions.push(Expression::EndOfLine);
+                } else {
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        "Expected a statement to follow a block.".to_string(),
+                        "A statement is expected here.".to_string()
+                    );
+                }
+            }
+            return Some(expressions);
+        } else {
+            return None;
+        }
     }
 
     /// Parses a visibility keyword
@@ -631,7 +755,15 @@ impl AstGenerator {
             .first_if(|t| t.kind().is_keyword() && t.kind().as_keyword().is_new())
         {
             // we have a new keyword, we need to parse a name.
-            if let Some(name) = self.tokens.second_if(|t| t.kind().is_identifier()) {
+            if let Some((inc, name)) = self.tokens.find_after_nth(
+                1,
+                |t| {
+                    dbg!(t);
+                    t.kind().is_identifier()
+                },
+                |t| t.kind().is_whitespace(),
+            ) {
+                self.tokens.peek_inc(inc);
                 // we have a name, we need to parse a function call inputs.
                 if let Some(args) = self.parse_function_call_inputs() {
                     // we have a function call inputs, we need to create a new call.
@@ -649,7 +781,7 @@ impl AstGenerator {
                 // we don't have a name, we need to report an error.
                 create_report!(
                     self.context,
-                    self.tokens.first().unwrap().range(),
+                    self.tokens.second().unwrap().range(),
                     "Expected a name to follow a new expression.".to_string(),
                     "A name was expected here.".to_string()
                 );
@@ -762,7 +894,10 @@ impl AstGenerator {
                             self.context,
                             self.tokens.first().unwrap().range(),
                             "Expected a colon to follow a property name.".to_string(),
-                            "A colon was expected here.".to_string()
+                            format!(
+                                "Unexpected Token: {}",
+                                self.tokens.first().unwrap().kind().to_string()
+                            )
                         );
                     }
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_brace()) {

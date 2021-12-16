@@ -98,6 +98,45 @@ pub trait StreamBuffer {
         self.nth(n).filter(|i| f(i))
     }
 
+    /// Finds the next item in the buffer that matches the predicate.
+    /// only after the first predicate is true.
+    ///
+    /// Returns `None` if the `find` function is never true.
+    fn find_after(
+        &mut self,
+        find: impl Fn(&Self::Item) -> bool,
+        after: impl Fn(&Self::Item) -> bool,
+    ) -> Option<(usize, Self::Item)> {
+        let mut i = 0;
+        loop {
+            if let Some(_) = self.nth_if(i, |t| after(t)) {
+                i += 1;
+            } else if let Some(tk) = self.nth_if(i, find) {
+                return Some((i, tk));
+            } else {
+                return None;
+            }
+        }
+    }
+
+    fn find_after_nth(
+        &mut self,
+        nth: usize,
+        find: impl Fn(&Self::Item) -> bool,
+        after: impl Fn(&Self::Item) -> bool,
+    ) -> Option<(usize, Self::Item)> {
+        let mut i = nth;
+        loop {
+            if let Some(_) = self.nth_if(i, |t| after(t)) {
+                i += 1;
+            } else if let Some(tk) = self.nth_if(i, find) {
+                return Some((i, tk));
+            } else {
+                return None;
+            }
+        }
+    }
+
     /// Returns a copy of the buffer without consuming it.
     fn items(&self) -> Vec<Self::Item>;
 

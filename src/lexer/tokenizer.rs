@@ -203,7 +203,7 @@ impl Cursor<'_> {
         match self.first() {
             ':' => {
                 if self.second() == ':' {
-                    self.peek_inc(2);
+                    self.peek_inc(1);
                     return Some((TokenType::Accessor, "::".to_string()));
                 } else {
                     self.peek();
@@ -233,6 +233,7 @@ impl Cursor<'_> {
             '}' => Some(TokenType::RightBrace),
             ';' => Some(TokenType::StatementEnd),
             ',' => Some(TokenType::Comma),
+            '\\' => Some(TokenType::Backslash),
             _ => None,
         }
     }

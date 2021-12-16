@@ -10,8 +10,12 @@ pub enum KeyWord {
     Var,
     /// Class
     Class,
+    /// Enums
+    Enum,
     /// Function interface
     Interface,
+    /// Extends
+    Extends,
     /// Type alias
     Type,
     /// `fn` - Function declaration.
@@ -61,8 +65,8 @@ impl KeyWord {
             "if" => Some(KeyWord::If),
             "else" => Some(KeyWord::Else),
             "pub" => Some(KeyWord::Public),
-            "priv" => Some(KeyWord::Private),
-            "prot" => Some(KeyWord::Protected),
+            "priv" | "private" => Some(KeyWord::Private),
+            "prot" | "protected" => Some(KeyWord::Protected),
             "static" => Some(KeyWord::Static),
             "return" => Some(KeyWord::Return),
             "break" => Some(KeyWord::Break),
@@ -73,6 +77,8 @@ impl KeyWord {
             "new" => Some(KeyWord::New),
             "drop" => Some(KeyWord::Drop),
             "use" => Some(KeyWord::Use),
+            "extends" => Some(KeyWord::Extends),
+            "enum" => Some(KeyWord::Enum),
             _ => None,
         }
     }
@@ -101,6 +107,8 @@ impl KeyWord {
             KeyWord::New => "new".to_string(),
             KeyWord::Drop => "drop".to_string(),
             KeyWord::Use => "use".to_string(),
+            KeyWord::Extends => "extends".to_string(),
+            KeyWord::Enum => "enum".to_string(),
         }
     }
 

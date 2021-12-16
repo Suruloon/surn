@@ -63,6 +63,11 @@ pub enum Expression {
     /// - `true`
     /// - `false`
     Literal(Literal),
+    /// A end of statement,
+    ///
+    /// For example:
+    /// - `;`
+    EndOfLine,
 }
 
 #[derive(Debug, Clone)]
@@ -217,6 +222,11 @@ pub enum Statement {
     /// - `use foo::bar as baz;`
     /// - `use foo::bar::{ baz, bat };`
     Import(Path),
+    /// A namespace statement.
+    /// For example:
+    /// - `namespace Foo;`
+    /// - `namespace Foo { code }`
+    Namespace(Namespace),
     /// A type statement / alias.
     /// For example:
     /// - `type Foo = int;`
@@ -404,7 +414,8 @@ impl Static {
 #[derive(Debug, Clone)]
 pub struct Class {
     pub name: String,
-    pub extends: Option<String>,
+    pub extends: Option<Vec<Path>>,
+    pub implements: Option<Vec<Path>>,
     pub properties: Vec<ClassProperty>,
     /// These are static properties.
     pub external: Vec<ClassProperty>,
@@ -417,9 +428,10 @@ impl Class {
         Class {
             name: String::new(),
             extends: None,
+            implements: None,
+            properties: Vec::new(),
             body: Vec::new(),
             node_id: 0,
-            properties: Vec::new(),
             external: Vec::new(),
         }
     }
@@ -430,7 +442,7 @@ pub struct ClassProperty {
     pub name: String,
     pub visibility: Visibility,
     pub type_ref: TypeRef,
-    pub value: Option<Expression>,
+    pub assignment: Option<Expression>,
 }
 
 pub enum ClassBody {}
@@ -445,7 +457,7 @@ pub struct Function {
     /// The arguments to the function.
     pub inputs: Vec<FunctionInput>,
     /// The body of the function,
-    pub body: Vec<Statement>,
+    pub body: Box<Statement>,
     /// The return types of the function,
     pub outputs: Vec<TypeRef>,
     /// The visibilty of the function.
@@ -556,7 +568,7 @@ impl Variable {
             name: self.name.clone(),
             visibility: self.visibility.clone(),
             type_ref: self.type_ref.clone(),
-            value: self.assignment.clone(),
+            assignment: self.assignment.clone(),
         }
     }
 }
@@ -573,6 +585,41 @@ pub struct Path {
     /// - `foo` in `bar::foo`
     /// - `bar, baz` in `foo::{bar, baz}`
     pub parts: Vec<Path>,
+}
+
+impl Path {
+    pub fn from(name: String, parts: Vec<String>) -> Self {
+        let mut path = Path {
+            name,
+            parts: Vec::new(),
+        };
+        for part in parts {
+            path.parts.push(Path {
+                name: part,
+                parts: Vec::new(),
+            });
+        }
+        path
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Namespace {
+    /// The path of the namespace.
+    /// For example:
+    /// - `foo`
+    /// - `std\io` etc.
+    pub path: Path,
+    /// The code of the namespace.
+    /// If code does not surround the namespace with `{}`, then it is automatically,
+    /// assumed to be within this namespace.
+    pub body: Option<Box<Statement>>,
+}
+
+impl Namespace {
+    pub fn new(path: Path) -> Self {
+        Namespace { path, body: None }
+    }
 }
 // }}
 

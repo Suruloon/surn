@@ -2,6 +2,11 @@ var x = function_call(10, x);
 var apple = {
     test: 10
 };
-var test2 = this.is.crazy(foo(10), bob);
+var test2 = this.is::crazy(foo(10), bob);
 var test = "This is a test string";
 var apple2;
+
+fn main() {
+    var test = new Test();
+    test.print();
+}

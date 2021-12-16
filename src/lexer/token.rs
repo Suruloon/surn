@@ -104,6 +104,8 @@ pub enum TokenType {
     RightBrace,
     /// The `,` character that can signal the end of a parameter.
     Comma,
+    /// The `\` character that can signal the start of a string literal.
+    Backslash,
 }
 
 impl TokenType {
@@ -268,6 +270,13 @@ impl TokenType {
         }
     }
 
+    pub fn is_backslash(&self) -> bool {
+        match self {
+            TokenType::Backslash => true,
+            _ => false,
+        }
+    }
+
     /// This will panic if the token type is not a keyword.
     pub fn as_keyword(&self) -> KeyWord {
         match self {
@@ -302,6 +311,7 @@ impl ToString for TokenType {
             TokenType::Whitespace => "Whitespace".to_string(),
             TokenType::Accessor => "Accessor".to_string(),
             TokenType::Range => "Range".to_string(),
+            TokenType::Backslash => "Backslash".to_string(),
         }
     }
 }
