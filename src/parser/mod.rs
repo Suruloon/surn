@@ -1,6 +1,5 @@
 use std::{
     process,
-    thread::{__FastLocalKeyInner, __OsLocalKeyInner},
 };
 
 use crate::{
@@ -549,9 +548,11 @@ impl AstGenerator {
         {
             self.skip_whitespace();
             if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
-                let mut extends: Vec<Path> = Vec::new();
-                let mut implements: Vec<Path> = Vec::new();
-
+                self.skip_whitespace();
+                let extends = self.parse_class_extension();
+                self.skip_whitespace();
+                let implements: Option<Vec<String>> = self.parse_class_implementation();
+                let body: Option<Statement> = self.parse_class_body();
                 return None;
             } else {
                 create_report!(
@@ -569,7 +570,80 @@ impl AstGenerator {
         }
     }
 
-    fn parse_class_extension(&mut self) -> Option<Vec<Path>> {}
+    fn parse_class_extension(&mut self) -> Option<String> {
+        if let Some(_) = self.tokens.peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Extends)) {
+            self.skip_whitespace();
+            if let Some(path) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+                return Some(path.value().unwrap());
+            } else {
+                create_report!(
+                    self.context,
+                    self.tokens.first().unwrap().range(),
+                    "Expected a class name to extend but none was found.".to_string(),
+                    format!(
+                        "Unexpected token: {}",
+                        self.tokens.first().unwrap().kind().to_string()
+                    )
+                );
+            }
+        }
+        return None;
+    }
+
+    fn parse_class_implementation(&mut self) -> Option<Vec<String>> {
+        if let Some(_) = self.tokens.peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Implements)) {
+            self.skip_whitespace();
+            if let Some(path) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+                let mut paths: Vec<String> = vec![path.value().unwrap()];
+                while !self.tokens.is_eof() {
+                    self.skip_whitespace();
+                    if let Some(_) = self.tokens.peek_if(|t| t.kind().is_comma()) {
+                        self.skip_whitespace();
+                        if let Some(path) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+                            paths.push(path.value().unwrap());
+                        } else {
+                            create_report!(
+                                self.context,
+                                self.tokens.first().unwrap().range(),
+                                "Expected a class name to extend but none was found.".to_string(),
+                                format!(
+                                    "Unexpected token: {}",
+                                    self.tokens.first().unwrap().kind().to_string()
+                                )
+                            );
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                if !self.tokens.is_eof() {
+                    return Some(paths);
+                } else {
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        "Expected a class name or interface to implement but none was found.".to_string(),
+                        format!(
+                            "Unexpected token: {}",
+                            self.tokens.first().unwrap().kind().to_string()
+                        )
+                    );
+                }
+            } else {
+                create_report!(
+                    self.context,
+                    self.tokens.first().unwrap().range(),
+                    "Expected a class name to implement but none was found.".to_string(),
+                    format!(
+                        "Unexpected token: {}",
+                        self.tokens.first().unwrap().kind().to_string()
+                    )
+                );
+            }
+        }
+        return None;
+    }
 
     fn parse_class_property(&mut self) -> Option<ClassProperty> {
         return None;

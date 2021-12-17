@@ -1,5 +1,5 @@
 namespace Test;
-class Test extends TestA, TestB implements Bob, Bob2 {
+class Test extends TestA implements Bob, Bob2 {
     pub x: string;
 
     pub construct() {

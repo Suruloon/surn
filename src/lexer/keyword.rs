@@ -16,6 +16,8 @@ pub enum KeyWord {
     Interface,
     /// Extends
     Extends,
+    /// Implements
+    Implements,
     /// Type alias
     Type,
     /// `fn` - Function declaration.
@@ -79,6 +81,7 @@ impl KeyWord {
             "use" => Some(KeyWord::Use),
             "extends" => Some(KeyWord::Extends),
             "enum" => Some(KeyWord::Enum),
+            "implements" => Some(KeyWord::Implements),
             _ => None,
         }
     }
@@ -109,6 +112,7 @@ impl KeyWord {
             KeyWord::Use => "use".to_string(),
             KeyWord::Extends => "extends".to_string(),
             KeyWord::Enum => "enum".to_string(),
+            KeyWord::Implements => "implements".to_string(),
         }
     }
 

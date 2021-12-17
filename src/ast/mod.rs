@@ -588,6 +588,13 @@ pub struct Path {
 }
 
 impl Path {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            parts: Vec::new(),
+        }
+    }
+
     pub fn from(name: String, parts: Vec<String>) -> Self {
         let mut path = Path {
             name,
