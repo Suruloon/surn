@@ -1,12 +1,10 @@
-use std::{
-    process,
-};
+use std::process;
 
 use crate::{
     ast::{
-        Array, AstBody, Call, Class, ClassProperty, Expression, Function, FunctionInput, Literal,
-        MemberListNode, MemberLookup, Namespace, NewCall, Object, ObjectProperty, Operation, Path,
-        Statement, Static, Variable, Visibility,
+        Array, AstBody, Call, Class, ClassAllowedStatement, ClassBody, ClassProperty, Expression,
+        Function, FunctionInput, Literal, MemberListNode, MemberLookup, Namespace, NewCall, Object,
+        ObjectProperty, Operation, Path, Statement, Static, Variable, Visibility,
     },
     lexer::{
         analysis::analyze,
@@ -552,7 +550,7 @@ impl AstGenerator {
                 let extends = self.parse_class_extension();
                 self.skip_whitespace();
                 let implements: Option<Vec<String>> = self.parse_class_implementation();
-                let body: Option<Statement> = self.parse_class_body();
+                let body: Option<ClassBody> = self.parse_class_body();
                 return None;
             } else {
                 create_report!(
@@ -571,7 +569,10 @@ impl AstGenerator {
     }
 
     fn parse_class_extension(&mut self) -> Option<String> {
-        if let Some(_) = self.tokens.peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Extends)) {
+        if let Some(_) = self
+            .tokens
+            .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Extends))
+        {
             self.skip_whitespace();
             if let Some(path) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                 return Some(path.value().unwrap());
@@ -591,7 +592,10 @@ impl AstGenerator {
     }
 
     fn parse_class_implementation(&mut self) -> Option<Vec<String>> {
-        if let Some(_) = self.tokens.peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Implements)) {
+        if let Some(_) = self
+            .tokens
+            .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Implements))
+        {
             self.skip_whitespace();
             if let Some(path) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                 let mut paths: Vec<String> = vec![path.value().unwrap()];
@@ -623,7 +627,8 @@ impl AstGenerator {
                     create_report!(
                         self.context,
                         self.tokens.first().unwrap().range(),
-                        "Expected a class name or interface to implement but none was found.".to_string(),
+                        "Expected a class name or interface to implement but none was found."
+                            .to_string(),
                         format!(
                             "Unexpected token: {}",
                             self.tokens.first().unwrap().kind().to_string()
@@ -646,7 +651,53 @@ impl AstGenerator {
     }
 
     fn parse_class_property(&mut self) -> Option<ClassProperty> {
+        // check for visibility
+        let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
+        self.skip_whitespace();
+        
+    }
+
+    fn parse_class_allowed_statement(&mut self) -> Option<ClassAllowedStatement> {
         return None;
+    }
+
+    fn parse_class_body(&mut self) -> Option<ClassBody> {
+        if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_brace()) {
+            let mut body = ClassBody::new();
+            // opening a body.
+            // we need to parse the body until we reach the end
+            while !self.tokens.is_eof()
+                && !self
+                    .tokens
+                    .first_if(|t| t.kind().is_right_brace())
+                    .is_some()
+            {
+                self.skip_whitespace_err(
+                    "Expected a right brace to close the class body, found none.",
+                );
+                if let Some(property) = self.parse_class_property() {
+                    body.properties.push(property);
+                } else if let Some(method) = self.parse_function() {
+                    body.methods.push(method);
+                } else if let Some(other) = self.parse_class_allowed_statement() {
+                    body.other.push(other);
+                } else {
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        "Classes must contain a property, method, import or macro.".to_string(),
+                        format!(
+                            "Unexpected token: \"{}\" inside class body.",
+                            self.tokens.first().unwrap().kind().to_string()
+                        )
+                    );
+                }
+            }
+
+            return Some(body);
+        } else {
+            return None;
+        }
     }
 
     /// Parses any block statement

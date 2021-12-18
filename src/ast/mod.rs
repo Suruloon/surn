@@ -416,10 +416,7 @@ pub struct Class {
     pub name: String,
     pub extends: Option<Vec<Path>>,
     pub implements: Option<Vec<Path>>,
-    pub properties: Vec<ClassProperty>,
-    /// These are static properties.
-    pub external: Vec<ClassProperty>,
-    pub body: Vec<Statement>,
+    pub body: ClassBody,
     pub node_id: u64,
 }
 
@@ -429,10 +426,8 @@ impl Class {
             name: String::new(),
             extends: None,
             implements: None,
-            properties: Vec::new(),
-            body: Vec::new(),
+            body: ClassBody::new(),
             node_id: 0,
-            external: Vec::new(),
         }
     }
 }
@@ -445,7 +440,35 @@ pub struct ClassProperty {
     pub assignment: Option<Expression>,
 }
 
-pub enum ClassBody {}
+/// Unlike the Statement enum, this contains a special list of statements.
+/// destructured and categorized by the parser.
+#[derive(Debug, Clone)]
+pub struct ClassBody {
+    pub properties: Vec<ClassProperty>,
+    pub methods: Vec<Function>,
+    pub other: Vec<ClassAllowedStatement>,
+}
+
+impl ClassBody {
+    pub fn new() -> Self {
+        ClassBody {
+            properties: Vec::new(),
+            methods: Vec::new(),
+            other: Vec::new(),
+        }
+    }
+}
+
+/// Class bodies ares special because they can contain certain statements,
+/// eg circular classes etc.
+#[derive(Debug, Clone)]
+pub enum ClassAllowedStatement {
+    Property(ClassProperty),
+    Method(Function),
+    Macro(CompilerMacro),
+    Import(Path),
+    Static(Static),
+}
 // }}
 
 // Functions {{
