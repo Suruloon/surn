@@ -650,6 +650,8 @@ impl AstGenerator {
         return None;
     }
 
+    /// This function will attempt to parse a class property, however
+    /// it will not parse it if it is not a property.
     fn parse_class_property(&mut self) -> Option<ClassProperty> {
         // check for visibility
         let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
