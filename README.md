@@ -1,6 +1,6 @@
 <div align="center">
      <p>
-          <img width="150" alt="Surn" src="https://raw.githubusercontent.com/Suruloon/surn/main/resources/surn_wmk.png?token=AD7GXXUIILDQWTUUMFE23NLBXZZTQ">
+          <img width="150" alt="Surn" src="https://i.imgur.com/OEPbt6V.png">
      </p>
      <p>
           <p>
@@ -9,13 +9,9 @@
      </p>
 </div>
 
-
-
 ## What is Surn?
 
 Surn is a powerful [source-to-source compiler](https://en.wikipedia.org/wiki/Source-to-source_compiler) that allows anyone to write in one syntax, but recieve the benefits of using multiple languages by compiling to that language.
-
-
 
 #### Supported Languages
 
