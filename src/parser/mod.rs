@@ -655,8 +655,14 @@ impl AstGenerator {
     fn parse_class_property(&mut self) -> Option<ClassProperty> {
         // check for visibility
         let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
+        let is_static = match self.tokens.peek_if(|t| t.kind().is_keyword()) {
+            Some(t) => t.kind().as_keyword() == KeyWord::Static,
+            None => false,
+        };
         self.skip_whitespace();
+        // check for static
         
+        return None;
     }
 
     fn parse_class_allowed_statement(&mut self) -> Option<ClassAllowedStatement> {
