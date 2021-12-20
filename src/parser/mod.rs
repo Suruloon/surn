@@ -13,7 +13,7 @@ use crate::{
         tokenizer::tokenize,
     },
     report::Report,
-    types::{Type, TypeKind, TypeRef},
+    types::{TypeKind, TypeDefinition, TypeParam, TypeReference, TypeUnion},
     util::{source::SourceBuffer, StreamBuffer, TokenStream},
     CompilerOptions,
 };
@@ -438,10 +438,10 @@ impl AstGenerator {
         return None;
     }
 
-    fn parse_function_inputs(&mut self) -> Option<(Vec<FunctionInput>, Vec<TypeRef>)> {
+    fn parse_function_inputs(&mut self) -> Option<(Vec<FunctionInput>, Vec<TypeKind>)> {
         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_parenthesis()) {
             let mut inputs: Vec<FunctionInput> = Vec::new();
-            let mut returns: Vec<TypeRef> = Vec::new();
+            let mut returns: Vec<TypeKind> = Vec::new();
             while !self.tokens.is_eof() {
                 self.skip_whitespace_err("Function declaration arguments must be closed.");
                 if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_parenthesis()) {
@@ -902,7 +902,7 @@ impl AstGenerator {
     /// - `int`
     /// - `string`
     /// - `bool`
-    fn parse_type_kind(&mut self) -> Option<Type> {
+    fn parse_type_kind(&mut self) -> Option<TypeKind> {
         None
     }
 

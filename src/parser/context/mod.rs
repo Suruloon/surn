@@ -193,7 +193,7 @@ impl Context {
             source,
             body: AstBody::new(),
             flags: ContextFlag::None,
-            types: TypeStore::new(Some(id)),
+            types: TypeStore::new(),
             origin: id,
             local_id: 0,
         }

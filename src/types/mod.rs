@@ -55,7 +55,7 @@ impl TypeKind {
     }
 
     pub fn built_in(name: String) -> Self {
-        TypeKind::BuiltIn(BuiltInType::from_string(name))
+        TypeKind::BuiltIn(BuiltInType::from_string(name).expect("Built in type not found."))
     }
 }
 

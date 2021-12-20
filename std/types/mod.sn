@@ -1,0 +1,15 @@
+/**
+ * Whether or not the given type is a "runtime type"
+ * This is transpiled to actual an actual "bool" when parsed.
+ */
+pub fn is_computative(type_kind: TypeKind): bool {
+    return type_kind is TypeKind::RuntimeType;
+}
+
+pub fn get_name(_type: TypeKind): string? {
+    
+}
+
+pub fn derives_of(compare: TypeKind, with: TypeKind): bool {
+    return compare is with;
+}
