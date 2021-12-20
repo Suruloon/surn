@@ -4,7 +4,7 @@ use crate::{
     ast::{
         Array, AstBody, Call, Class, ClassAllowedStatement, ClassBody, ClassProperty, Expression,
         Function, FunctionInput, Literal, MemberListNode, MemberLookup, Namespace, NewCall, Object,
-        ObjectProperty, Operation, Path, Statement, Static, Variable, Visibility,
+        ObjectProperty, Operation, Path, Return, Statement, Static, Variable, Visibility,
     },
     lexer::{
         analysis::analyze,
@@ -13,7 +13,7 @@ use crate::{
         tokenizer::tokenize,
     },
     report::Report,
-    types::{TypeKind, TypeDefinition, TypeParam, TypeReference, TypeUnion},
+    types::{BuiltInType, TypeDefinition, TypeKind, TypeParam, TypeReference, TypeUnion},
     util::{source::SourceBuffer, StreamBuffer, TokenStream},
     CompilerOptions,
 };
@@ -278,7 +278,7 @@ impl AstGenerator {
 
             // check if the next token is an indentifier
             if let Some(identifier) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
-                let mut type_node: Type;
+                let mut type_node: Option<TypeKind> = None;
 
                 // token is an identifier!
                 // we need to check if a colon follows, if so, we need to parse a type, otherwise we can skip
@@ -286,7 +286,7 @@ impl AstGenerator {
                 if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
                     // now parse a type statement.
                     if let Some(type_smt) = self.parse_type_kind() {
-                        type_node = type_smt;
+                        type_node = Some(type_smt);
                     } else {
                         create_report!(
                             self.context,
@@ -296,7 +296,7 @@ impl AstGenerator {
                         );
                     }
                 } else {
-                    type_node = Type::uninit();
+                    type_node = None;
                 }
 
                 // we now need an assignment operator
@@ -318,7 +318,7 @@ impl AstGenerator {
                             return Some((
                                 Variable::new(
                                     identifier.value().unwrap(),
-                                    TypeRef::empty(),
+                                    type_node,
                                     visibility,
                                     Some(expr),
                                 ),
@@ -348,12 +348,7 @@ impl AstGenerator {
                         // we have an end of statement!
                         // we can return a variable declaration
                         return Some((
-                            Variable::new(
-                                identifier.value().unwrap(),
-                                TypeRef::empty(),
-                                visibility,
-                                None,
-                            ),
+                            Variable::new(identifier.value().unwrap(), type_node, visibility, None),
                             is_constant,
                         ));
                     } else {
@@ -457,6 +452,7 @@ impl AstGenerator {
                     );
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
                         // now parse a type statement.
+                        self.skip_whitespace();
                         if let Some(type_smt) = self.parse_type_kind() {
                             // we have a type!
                             // we need to parse a comma
@@ -551,7 +547,13 @@ impl AstGenerator {
                 self.skip_whitespace();
                 let implements: Option<Vec<String>> = self.parse_class_implementation();
                 let body: Option<ClassBody> = self.parse_class_body();
-                return None;
+                return Some(Class {
+                    name: name.value().unwrap(),
+                    extends,
+                    implements,
+                    body: body.unwrap_or(ClassBody::new()),
+                    node_id: self.context.get_next_local_id(),
+                });
             } else {
                 create_report!(
                     self.context,
@@ -654,13 +656,13 @@ impl AstGenerator {
     /// it will not parse it if it is not a property.
     fn parse_class_property(&mut self, visibility: Visibility) -> Option<ClassProperty> {
         if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
-            let mut type_node: Type;
+            let mut type_node: Option<TypeKind> = None;
             // check if there's a type assigned to the property, if not, check for a statement end.
             if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
                 // type statement.
                 self.skip_whitespace();
-                if let Some(_) = self.parse_type_kind() {
-                    type_node = Type::uninit();
+                if let Some(kind) = self.parse_type_kind() {
+                    type_node = Some(kind);
                 } else {
                     create_report!(
                         self.context,
@@ -687,7 +689,7 @@ impl AstGenerator {
                         return Some(ClassProperty::new(
                             name.value().unwrap(),
                             visibility,
-                            TypeRef::empty(),
+                            type_node.clone(),
                             Some(expr),
                         ));
                     } else {
@@ -715,7 +717,7 @@ impl AstGenerator {
                     return Some(ClassProperty::new(
                         name.value().unwrap(),
                         visibility,
-                        TypeRef::empty(),
+                        type_node.clone(),
                         None,
                     ));
                 } else {
@@ -804,7 +806,9 @@ impl AstGenerator {
                 self.skip_whitespace_err(
                     "Expected a right brace to close the class body, found none.",
                 );
-                if let Some(property) = self.parse_class_property(Visibility::Private) {
+                if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_brace()) {
+                    break;
+                } else if let Some(property) = self.parse_class_property(Visibility::Private) {
                     body.properties.push(property);
                 } else if let Some(method) = self.parse_function() {
                     body.methods.push(method);
@@ -848,6 +852,30 @@ impl AstGenerator {
                     break;
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
                     expressions.push(Expression::EndOfLine);
+                } else if let Some(_) = self
+                    .tokens
+                    .peek_if(|t| t.kind().is_keyword() && t.kind().as_keyword() == KeyWord::Return)
+                {
+                    // we have a return statement!
+                    // we need to parse the return statement
+                    self.skip_whitespace();
+                    if let Some(expr) = self.parse_expression() {
+                        expressions.push(Expression::Statement(Box::new(Statement::Return(
+                            Return::new(Some(expr)),
+                        ))));
+                    }
+                    if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
+                        // end of statement! however, we dont care because this is a block and we don't
+                        // have the context of the block.
+                        continue;
+                    } else {
+                        create_report!(
+                            self.context,
+                            self.tokens.first().unwrap().range(),
+                            "Expected an expression to follow a return statement.".to_string(),
+                            "Expected an expression here.".to_string()
+                        );
+                    }
                 } else {
                     create_report!(
                         self.context,
@@ -903,7 +931,126 @@ impl AstGenerator {
     /// - `string`
     /// - `bool`
     fn parse_type_kind(&mut self) -> Option<TypeKind> {
-        None
+        if let Some(initial) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+            let name = initial.value().unwrap();
+            // The first token is an identifier! This is good, this is a type kind already, however!,
+            // we need to check if the next token is a union, if it's not, we can return the type kind.
+            self.skip_whitespace();
+            if let Some(_) = self
+                .tokens
+                .peek_if(|t| t.kind().is_operator() && t.value().unwrap().as_str() == "|")
+            {
+                // this is a union type!
+                let mut union_type = TypeUnion::empty();
+                while !self.tokens.is_eof() {
+                    // we need to recursively parse in a union type, this can be exhausting!
+                    // because of this, we will only be parsing type references here.
+                    self.skip_whitespace_err("Expected a type reference to follow a union type.");
+                    if let Some(_) = self
+                        .tokens
+                        .peek_if(|t| t.kind().is_operator() && t.value().unwrap().as_str() == "|")
+                    {
+                        // we have another pipe, meaning another type to the type union, lets parse the next token.
+                        self.skip_whitespace_err(
+                            "Expected a type reference to follow a union type.",
+                        );
+                        if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+                            // we have a type reference!
+                            union_type
+                                .types
+                                .push(TypeKind::Reference(TypeReference::new(
+                                    name.value().unwrap(),
+                                    self.parse_type_generics(),
+                                )));
+                        } else {
+                            create_report!(
+                                self.context,
+                                self.tokens.first().unwrap().range(),
+                                "Expected a type reference to follow a union type.".to_string(),
+                                "A type reference is expected here.".to_string()
+                            );
+                        }
+                    } else if let Some(_) =
+                        self.tokens.first_if(|t| t.value().unwrap().as_str() == "=")
+                    {
+                        // we have an equals sign, meaning this union is completed.
+                        break;
+                    } else {
+                        create_report!(
+                            self.context,
+                            self.tokens.first().unwrap().range(),
+                            "Expected a type reference to follow a union type.".to_string(),
+                            "A type reference is expected here.".to_string()
+                        );
+                    }
+                }
+
+                // check to see if all types are actually references in the union.
+                // basically checking if the reference is a builtin.
+                for type_kind in union_type.types.iter_mut() {
+                    if let TypeKind::Reference(ref reference) = type_kind {
+                        if let Some(built_in) = BuiltInType::from_string(reference.name.clone()) {
+                            *type_kind = TypeKind::BuiltIn(built_in);
+                        }
+                    }
+                }
+                return Some(TypeKind::Union(Box::new(union_type)));
+            } else {
+                if let Some(ty) = BuiltInType::from_string(name.clone()) {
+                    return Some(TypeKind::BuiltIn(ty));
+                } else {
+                    return Some(TypeKind::Reference(TypeReference::new(
+                        name.clone(),
+                        self.parse_type_generics(),
+                    )));
+                }
+            }
+        }
+        return None;
+    }
+
+    fn parse_type_generics(&mut self) -> Option<Vec<TypeParam>> {
+        if let Some(_) = self
+            .tokens
+            .peek_if(|t| t.kind().is_operator() && t.value().unwrap() == "<")
+        {
+            let mut generics: Vec<TypeParam> = Vec::new();
+            while !self.tokens.is_eof() {
+                self.skip_whitespace_err(
+                    "Expected a type paramater to follow a typed parameter list.",
+                );
+                if let Some(kind) = self.parse_type_kind() {
+                    generics.push(TypeParam::new(kind));
+                } else if let Some(_) = self
+                    .tokens
+                    .peek_if(|t| t.kind().is_operator() && t.value().unwrap() == ">")
+                {
+                    // check if the generics list is empty, if so throw an error
+                    if generics.is_empty() {
+                        create_report!(
+                            self.context,
+                            self.tokens.first().unwrap().range(),
+                            "Expected a type paramater to follow a typed parameter list."
+                                .to_string(),
+                            "A type paramater is expected here.".to_string()
+                        );
+                    } else {
+                        return Some(generics);
+                    }
+                } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_comma()) {
+                    continue;
+                } else {
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        "Expected a type paramater to follow a typed parameter list.".to_string(),
+                        "A type paramater is expected here.".to_string()
+                    );
+                }
+            }
+        }
+
+        return None;
     }
 
     /// Parses an expression.
@@ -913,6 +1060,13 @@ impl AstGenerator {
     /// - `x + 5`
     /// - `x + 5 * y`
     fn parse_expression(&mut self) -> Option<Expression> {
+        // parse a statement expression
+        // this needs to be before object parsing because
+        // object expressions will assume a block check has already taken place.
+        if let Some(statement_expr) = self.parse_statement() {
+            return Some(Expression::Statement(Box::new(statement_expr)));
+        }
+
         // parse a call expression
         if let Some(call_expr) = self.parse_call_expression() {
             return Some(Expression::Call(call_expr));
@@ -931,13 +1085,6 @@ impl AstGenerator {
         // parse an array
         if let Some(array_expr) = self.parse_array_expression() {
             return Some(Expression::Array(array_expr));
-        }
-
-        // parse a statement expression
-        // this needs to be before object parsing because
-        // object expressions will assume a block check has already taken place.
-        if let Some(statement_expr) = self.parse_statement() {
-            return Some(Expression::Statement(Box::new(statement_expr)));
         }
 
         // parse an object
@@ -1025,10 +1172,7 @@ impl AstGenerator {
             // we have a new keyword, we need to parse a name.
             if let Some((inc, name)) = self.tokens.find_after_nth(
                 1,
-                |t| {
-                    dbg!(t);
-                    t.kind().is_identifier()
-                },
+                |t| t.kind().is_identifier(),
                 |t| t.kind().is_whitespace(),
             ) {
                 self.tokens.peek_inc(inc);

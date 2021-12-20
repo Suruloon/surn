@@ -67,8 +67,14 @@ impl TypeKind {
 /// Where the paramater is `T`
 #[derive(Debug, Clone)]
 pub struct TypeParam {
-    pub name: String,
+    pub name: Option<String>,
     pub kind: TypeKind,
+}
+
+impl TypeParam {
+    pub fn new(kind: TypeKind) -> Self {
+        TypeParam { name: None, kind }
+    }
 }
 
 /// A type union.
@@ -84,6 +90,10 @@ pub struct TypeUnion {
 }
 
 impl TypeUnion {
+    pub fn empty() -> Self {
+        TypeUnion { types: vec![] }
+    }
+
     pub fn new(types: Vec<TypeKind>) -> Self {
         TypeUnion { types }
     }

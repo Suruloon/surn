@@ -2,8 +2,8 @@ namespace Test;
 class Test extends TestA implements Bob, Bob2 {
     pub x: string;
 
-    pub construct() {
-        this.x = "hello";
+    pub fn construct() {
+
     }
 
     pub fn print(): void {
@@ -12,7 +12,7 @@ class Test extends TestA implements Bob, Bob2 {
 
     pub static fn write(value: string): Self {
         var self = new Self();
-        self.x = value;
+
         return self;
     }
 }

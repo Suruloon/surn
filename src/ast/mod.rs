@@ -229,6 +229,11 @@ pub enum Statement {
     /// - `type Foo = int;`
     /// - `type Foo = Bar;`
     TypeDef(TypeDefinition),
+    /// A return statement.
+    ///
+    /// For example:
+    /// - `return 1`
+    Return(Return),
     /// A macro invocation.
     /// For example:
     /// - `php!( "hello" )`
@@ -411,8 +416,8 @@ impl Static {
 #[derive(Debug, Clone)]
 pub struct Class {
     pub name: String,
-    pub extends: Option<Vec<Path>>,
-    pub implements: Option<Vec<Path>>,
+    pub extends: Option<String>,
+    pub implements: Option<Vec<String>>,
     pub body: ClassBody,
     pub node_id: u64,
 }
@@ -433,7 +438,7 @@ impl Class {
 pub struct ClassProperty {
     pub name: String,
     pub visibility: Visibility,
-    pub ty: TypeKind,
+    pub ty: Option<TypeKind>,
     pub assignment: Option<Expression>,
 }
 
@@ -441,7 +446,7 @@ impl ClassProperty {
     pub fn new(
         name: String,
         visibility: Visibility,
-        ty: TypeKind,
+        ty: Option<TypeKind>,
         assignment: Option<Expression>,
     ) -> Self {
         ClassProperty {
@@ -486,6 +491,17 @@ pub enum ClassAllowedStatement {
 impl ClassAllowedStatement {
     pub fn new_static(s: ClassAllowedStatement) -> Self {
         ClassAllowedStatement::Static(Box::new(s))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Return {
+    pub expression: Option<Expression>,
+}
+
+impl Return {
+    pub fn new(expression: Option<Expression>) -> Self {
+        Return { expression }
     }
 }
 // }}
@@ -580,7 +596,7 @@ pub struct MethodCall {
 pub struct Variable {
     pub name: String,
     pub node_id: u64,
-    pub ty: TypeKind,
+    pub ty: Option<TypeKind>,
     pub visibility: Visibility,
     pub assignment: Option<Expression>,
 }
@@ -588,7 +604,7 @@ pub struct Variable {
 impl Variable {
     pub fn new(
         name: String,
-        ty: TypeKind,
+        ty: Option<TypeKind>,
         visibility: Visibility,
         assignment: Option<Expression>,
     ) -> Self {
