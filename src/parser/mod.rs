@@ -652,20 +652,141 @@ impl AstGenerator {
 
     /// This function will attempt to parse a class property, however
     /// it will not parse it if it is not a property.
-    fn parse_class_property(&mut self) -> Option<ClassProperty> {
-        // check for visibility
-        let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
-        let is_static = match self.tokens.peek_if(|t| t.kind().is_keyword()) {
-            Some(t) => t.kind().as_keyword() == KeyWord::Static,
-            None => false,
-        };
-        self.skip_whitespace();
-        // check for static
-        
+    fn parse_class_property(&mut self, visibility: Visibility) -> Option<ClassProperty> {
+        if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
+            let mut type_node: Type;
+            // check if there's a type assigned to the property, if not, check for a statement end.
+            if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
+                // type statement.
+                self.skip_whitespace();
+                if let Some(_) = self.parse_type_kind() {
+                    type_node = Type::uninit();
+                } else {
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        "Expected a type statement to follow a property declaration.".to_string(),
+                        "A type statement is expected here.".to_string()
+                    );
+                }
+            }
+
+            // check for an "equals" operator
+            if let Some(_) = self
+                .tokens
+                .peek_if(|t| t.kind().is_operator() && (t.value().unwrap() == "=".to_string()))
+            {
+                // we have an equals operator!
+                // we need to parse an expression
+                self.skip_whitespace_err("An expression was expected but none was found.");
+                if let Some(expr) = self.parse_expression() {
+                    // we have an expression!
+                    // we need to parse a semicolon
+                    self.skip_whitespace_err("A semicolon was expected but none was found.");
+                    if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
+                        return Some(ClassProperty::new(
+                            name.value().unwrap(),
+                            visibility,
+                            TypeRef::empty(),
+                            Some(expr),
+                        ));
+                    } else {
+                        create_report!(
+                            self.context,
+                            self.tokens.first().unwrap().range(),
+                            "Expected a semicolon to follow a variable declaration.".to_string(),
+                            "A semicolon is expected here.".to_string()
+                        );
+                    }
+                } else {
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        "Expected an expression to follow a variable declaration.".to_string(),
+                        "An expression is expected here.".to_string()
+                    );
+                }
+            } else {
+                // variables **can** be uninitialized
+                // we need to check if the next token is an end of statement
+                if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
+                    // we have an end of statement!
+                    // we can return a variable declaration
+                    return Some(ClassProperty::new(
+                        name.value().unwrap(),
+                        visibility,
+                        TypeRef::empty(),
+                        None,
+                    ));
+                } else {
+                    // we don't have an end of statement!
+                    // we need to report an error
+                    create_report!(
+                        self.context,
+                        self.tokens.first().unwrap().range(),
+                        "Expected an end of statement to follow an uninitialized declaration."
+                            .to_string(),
+                        "A semi-colon is expected here.".to_string()
+                    );
+                }
+            }
+        }
         return None;
     }
 
-    fn parse_class_allowed_statement(&mut self) -> Option<ClassAllowedStatement> {
+    fn parse_class_allowed_statement(
+        &mut self,
+        visibility: Option<Visibility>,
+    ) -> Option<ClassAllowedStatement> {
+        // check for visibility
+        let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
+        if let Some(_) = self
+            .tokens
+            .peek_if(|t| t.kind().is_keyword() && t.kind().as_keyword() == KeyWord::Static)
+        {
+            self.skip_whitespace();
+            // the statement is static
+            if let Some(property) = self.parse_class_property(visibility.clone()) {
+                return Some(ClassAllowedStatement::new_static(
+                    ClassAllowedStatement::Property(property),
+                ));
+            } else if let Some(mut func) = self.parse_function() {
+                func.visibility = visibility;
+                return Some(ClassAllowedStatement::new_static(
+                    ClassAllowedStatement::Method(func),
+                ));
+            } else {
+                create_report!(
+                    self.context,
+                    self.tokens.first().unwrap().range(),
+                    "Expected a property or function declaration but none was found.".to_string(),
+                    format!(
+                        "Unexpected token: {}",
+                        self.tokens.first().unwrap().kind().to_string()
+                    )
+                );
+            }
+        } else {
+            // the statement is not static
+            // Parse a property
+            self.skip_whitespace_err("Expected a class statement but none was found.");
+            if let Some(property) = self.parse_class_property(visibility.clone()) {
+                return Some(ClassAllowedStatement::Property(property));
+            } else if let Some(mut func) = self.parse_function() {
+                func.visibility = visibility;
+                return Some(ClassAllowedStatement::Method(func));
+            } else {
+                create_report!(
+                    self.context,
+                    self.tokens.first().unwrap().range(),
+                    "Expected a property or function declaration but none was found.".to_string(),
+                    format!(
+                        "Unexpected token: {}",
+                        self.tokens.first().unwrap().kind().to_string()
+                    )
+                );
+            }
+        }
         return None;
     }
 
@@ -683,11 +804,11 @@ impl AstGenerator {
                 self.skip_whitespace_err(
                     "Expected a right brace to close the class body, found none.",
                 );
-                if let Some(property) = self.parse_class_property() {
+                if let Some(property) = self.parse_class_property(Visibility::Private) {
                     body.properties.push(property);
                 } else if let Some(method) = self.parse_function() {
                     body.methods.push(method);
-                } else if let Some(other) = self.parse_class_allowed_statement() {
+                } else if let Some(other) = self.parse_class_allowed_statement(None) {
                     body.other.push(other);
                 } else {
                     create_report!(
@@ -755,6 +876,20 @@ impl AstGenerator {
             let visibility = Visibility::from_keyword(modifier.kind().as_keyword());
 
             self.skip_whitespace_err("A statement or static keyword was expected after a visibility modifier but none was found.");
+
+            return Some(visibility);
+        } else {
+            return None;
+        }
+    }
+
+    /// Similar to `parse_statement` but it will not consume the token stream,
+    fn get_visibility(&mut self) -> Option<Visibility> {
+        if let Some(modifier) = self
+            .tokens
+            .first_if(|t| t.kind().is_keyword() && t.kind().as_keyword().is_visibility())
+        {
+            let visibility = Visibility::from_keyword(modifier.kind().as_keyword());
 
             return Some(visibility);
         } else {

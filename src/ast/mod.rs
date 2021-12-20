@@ -440,6 +440,22 @@ pub struct ClassProperty {
     pub assignment: Option<Expression>,
 }
 
+impl ClassProperty {
+    pub fn new(
+        name: String,
+        visibility: Visibility,
+        type_ref: TypeRef,
+        assignment: Option<Expression>,
+    ) -> Self {
+        ClassProperty {
+            name,
+            visibility,
+            type_ref,
+            assignment,
+        }
+    }
+}
+
 /// Unlike the Statement enum, this contains a special list of statements.
 /// destructured and categorized by the parser.
 #[derive(Debug, Clone)]
@@ -467,7 +483,13 @@ pub enum ClassAllowedStatement {
     Method(Function),
     Macro(CompilerMacro),
     Import(Path),
-    Static(Static),
+    Static(Box<ClassAllowedStatement>),
+}
+
+impl ClassAllowedStatement {
+    pub fn new_static(s: ClassAllowedStatement) -> Self {
+        ClassAllowedStatement::Static(Box::new(s))
+    }
 }
 // }}
 
