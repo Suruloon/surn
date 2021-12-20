@@ -1,6 +1,6 @@
 use crate::{
     lexer::{keyword::KeyWord, token::Token},
-    types::TypeRef,
+    types::{TypeDefinition, TypeKind},
 };
 
 use self::ops::AnyOperation;
@@ -74,12 +74,12 @@ pub enum Expression {
 pub struct Literal {
     pub value: String,
     /// The type of the literal assumed by the compiler
-    pub type_node: Option<TypeRef>,
+    pub ty: Option<TypeKind>,
 }
 
 impl Literal {
-    pub fn new(value: String, type_node: Option<TypeRef>) -> Self {
-        Self { value, type_node }
+    pub fn new(value: String, ty: Option<TypeKind>) -> Self {
+        Self { value, ty }
     }
 }
 
@@ -135,12 +135,12 @@ impl MemberListNode {
 #[derive(Debug, Clone)]
 pub struct Array {
     pub values: Vec<Expression>,
-    pub type_node: Option<TypeRef>,
+    pub ty: Option<TypeKind>,
 }
 
 impl Array {
-    pub fn new(values: Vec<Expression>, type_node: Option<TypeRef>) -> Array {
-        Array { values, type_node }
+    pub fn new(values: Vec<Expression>, ty: Option<TypeKind>) -> Array {
+        Array { values, ty }
     }
 }
 
@@ -151,21 +151,18 @@ pub struct Object {
     /// The type of the object.
     /// This is used to validate the object.
     /// However it can be None if the object is annonymous.
-    pub type_node: Option<TypeRef>,
+    pub ty: Option<TypeKind>,
 }
 
 impl Object {
-    pub fn new(properties: Vec<ObjectProperty>, type_node: Option<TypeRef>) -> Object {
-        Object {
-            properties,
-            type_node,
-        }
+    pub fn new(properties: Vec<ObjectProperty>, ty: Option<TypeKind>) -> Object {
+        Object { properties, ty }
     }
 
     pub fn empty() -> Object {
         Object {
             properties: Vec::new(),
-            type_node: None,
+            ty: None,
         }
     }
 }
@@ -231,7 +228,7 @@ pub enum Statement {
     /// For example:
     /// - `type Foo = int;`
     /// - `type Foo = Bar;`
-    Type(TypeRef),
+    TypeDef(TypeDefinition),
     /// A macro invocation.
     /// For example:
     /// - `php!( "hello" )`
@@ -247,9 +244,9 @@ impl Statement {
         }
     }
 
-    pub fn get_type(&self) -> Option<TypeRef> {
+    pub fn get_type_definition(&self) -> Option<TypeDefinition> {
         match self {
-            Statement::Type(t) => Some(t.clone()),
+            Statement::TypeDef(t) => Some(t.clone()),
             _ => None,
         }
     }
@@ -354,7 +351,7 @@ impl Statement {
 
     pub fn is_type(&self) -> bool {
         match self {
-            Statement::Type(_) => true,
+            Statement::TypeDef(_) => true,
             _ => false,
         }
     }
@@ -436,7 +433,7 @@ impl Class {
 pub struct ClassProperty {
     pub name: String,
     pub visibility: Visibility,
-    pub type_ref: TypeRef,
+    pub ty: TypeKind,
     pub assignment: Option<Expression>,
 }
 
@@ -444,13 +441,13 @@ impl ClassProperty {
     pub fn new(
         name: String,
         visibility: Visibility,
-        type_ref: TypeRef,
+        ty: TypeKind,
         assignment: Option<Expression>,
     ) -> Self {
         ClassProperty {
             name,
             visibility,
-            type_ref,
+            ty,
             assignment,
         }
     }
@@ -504,7 +501,7 @@ pub struct Function {
     /// The body of the function,
     pub body: Box<Statement>,
     /// The return types of the function,
-    pub outputs: Vec<TypeRef>,
+    pub outputs: Vec<TypeKind>,
     /// The visibilty of the function.
     pub visibility: Visibility,
     /// The id for the given function.
@@ -514,7 +511,7 @@ pub struct Function {
 #[derive(Debug, Clone)]
 pub struct FunctionInput {
     pub name: String,
-    pub types: Vec<TypeRef>,
+    pub types: Vec<TypeDefinition>,
 }
 
 impl FunctionInput {
@@ -583,7 +580,7 @@ pub struct MethodCall {
 pub struct Variable {
     pub name: String,
     pub node_id: u64,
-    pub type_ref: TypeRef,
+    pub ty: TypeKind,
     pub visibility: Visibility,
     pub assignment: Option<Expression>,
 }
@@ -591,14 +588,14 @@ pub struct Variable {
 impl Variable {
     pub fn new(
         name: String,
-        type_ref: TypeRef,
+        ty: TypeKind,
         visibility: Visibility,
         assignment: Option<Expression>,
     ) -> Self {
         Self {
             name,
             node_id: 0,
-            type_ref,
+            ty,
             visibility,
             assignment,
         }
@@ -606,15 +603,6 @@ impl Variable {
 
     pub fn is_uninit(&self) -> bool {
         self.assignment.is_none()
-    }
-
-    pub fn to_class_property(&self) -> ClassProperty {
-        ClassProperty {
-            name: self.name.clone(),
-            visibility: self.visibility.clone(),
-            type_ref: self.type_ref.clone(),
-            assignment: self.assignment.clone(),
-        }
     }
 }
 
