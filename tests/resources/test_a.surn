@@ -1,9 +1,9 @@
-namespace Test;
+namespace Test\Bob;
 class Test extends TestA implements Bob, Bob2 {
     pub x: string;
 
     pub fn construct() {
-
+        say_hi()
     }
 
     pub fn print(): void {

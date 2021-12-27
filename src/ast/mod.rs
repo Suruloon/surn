@@ -527,14 +527,14 @@ pub struct Function {
 #[derive(Debug, Clone)]
 pub struct FunctionInput {
     pub name: String,
-    pub types: Vec<TypeDefinition>,
+    pub ty: Option<TypeKind>,
 }
 
 impl FunctionInput {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, ty: Option<TypeKind>) -> Self {
         FunctionInput {
             name,
-            types: Vec::new(),
+            ty,
         }
     }
 }

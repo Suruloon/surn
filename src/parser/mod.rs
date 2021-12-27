@@ -159,7 +159,7 @@ impl AstGenerator {
                 loop {
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_backslash()) {
                         if let Some(ident) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
-                            path.push(ident.kind().to_string());
+                            path.push(ident.value().unwrap());
                         } else {
                             create_report!(
                                 self.context,
@@ -175,7 +175,10 @@ impl AstGenerator {
                             });
                         }
                     } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
-                        break;
+                        return Some(Namespace {
+                            path: Path::from(name.value().unwrap(), path),
+                            body: None,
+                        });
                     } else {
                         create_report!(
                             self.context,
@@ -462,6 +465,7 @@ impl AstGenerator {
                                 // we need to parse another argument
                                 inputs.push(FunctionInput::new(
                                     param_name.value().unwrap_or("".to_string()),
+                                    Some(type_smt),
                                 ));
                             } else {
                                 // we don't have a comma!
@@ -469,7 +473,7 @@ impl AstGenerator {
                                 if let Some(_) =
                                     self.tokens.peek_if(|t| t.kind().is_right_parenthesis())
                                 {
-                                    inputs.push(FunctionInput::new(param_name.value().unwrap()));
+                                    inputs.push(FunctionInput::new(param_name.value().unwrap(), Some(type_smt)));
                                     break;
                                 } else {
                                     // we don't have a right parenthesis!
@@ -1339,7 +1343,7 @@ impl AstGenerator {
         // either way we need to check if the next token is a identifier.
         if let Some(v) = self
             .tokens
-            .peek_if(|t| t.kind().is_identifier() || t.kind().is_number() || t.kind().is_string())
+            .peek_if(|t| t.kind().is_identifier() || t.kind().is_number() || t.kind().is_string() || t.kind().is_boolean())
         {
             return Some(Literal::new(v.value().unwrap(), None));
         } else {

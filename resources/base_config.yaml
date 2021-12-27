@@ -2,6 +2,10 @@ project:
   name: Surn-Test
   author: John
 
+generation:
+  # Whether or not to use PSR-4 coding standards when generating the PHP code.
+  psr-4: true
+  target-version: 8
 libraries:
   # Any library that is coded in this language or php should be listed here.
   # As libraries listed here will provide their own intellisense.

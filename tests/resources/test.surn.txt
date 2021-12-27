@@ -2,18 +2,27 @@ AstBody {
     flags: 0,
     program: [
         Statement(
+            Namespace(
+                Namespace {
+                    path: Path {
+                        name: "pocketmine",
+                        parts: [
+                            Path {
+                                name: "dad",
+                                parts: [],
+                            },
+                        ],
+                    },
+                    body: None,
+                },
+            ),
+        ),
+        Statement(
             Class(
                 Class {
-                    name: "Test",
-                    extends: Some(
-                        "TestA",
-                    ),
-                    implements: Some(
-                        [
-                            "Bob",
-                            "Bob2",
-                        ],
-                    ),
+                    name: "Dog",
+                    extends: None,
+                    implements: None,
                     body: ClassBody {
                         properties: [],
                         methods: [],
@@ -33,99 +42,31 @@ AstBody {
                             Method(
                                 Function {
                                     name: Some(
-                                        "construct",
-                                    ),
-                                    inputs: [],
-                                    body: Block(
-                                        [],
-                                    ),
-                                    outputs: [],
-                                    visibility: Public,
-                                    node_id: 0,
-                                },
-                            ),
-                            Method(
-                                Function {
-                                    name: Some(
-                                        "print",
+                                        "say_hi",
                                     ),
                                     inputs: [],
                                     body: Block(
                                         [
-                                            Call(
-                                                Call {
-                                                    name: "print",
-                                                    arguments: [
-                                                        Literal(
-                                                            Literal {
-                                                                value: "${this.x}, world!",
-                                                                ty: None,
-                                                            },
+                                            Statement(
+                                                Return(
+                                                    Return {
+                                                        expression: Some(
+                                                            Literal(
+                                                                Literal {
+                                                                    value: "hi",
+                                                                    ty: None,
+                                                                },
+                                                            ),
                                                         ),
-                                                    ],
-                                                },
+                                                    },
+                                                ),
                                             ),
-                                            EndOfLine,
                                         ],
                                     ),
                                     outputs: [],
                                     visibility: Public,
                                     node_id: 0,
                                 },
-                            ),
-                            Static(
-                                Method(
-                                    Function {
-                                        name: Some(
-                                            "write",
-                                        ),
-                                        inputs: [
-                                            FunctionInput {
-                                                name: "value",
-                                                types: [],
-                                            },
-                                        ],
-                                        body: Block(
-                                            [
-                                                Statement(
-                                                    Var(
-                                                        Variable {
-                                                            name: "self",
-                                                            node_id: 0,
-                                                            ty: None,
-                                                            visibility: Private,
-                                                            assignment: Some(
-                                                                New(
-                                                                    NewCall {
-                                                                        name: "Self",
-                                                                        arguments: [],
-                                                                    },
-                                                                ),
-                                                            ),
-                                                        },
-                                                    ),
-                                                ),
-                                                Statement(
-                                                    Return(
-                                                        Return {
-                                                            expression: Some(
-                                                                Literal(
-                                                                    Literal {
-                                                                        value: "self",
-                                                                        ty: None,
-                                                                    },
-                                                                ),
-                                                            ),
-                                                        },
-                                                    ),
-                                                ),
-                                            ],
-                                        ),
-                                        outputs: [],
-                                        visibility: Public,
-                                        node_id: 0,
-                                    },
-                                ),
                             ),
                         ],
                     },
@@ -137,49 +78,30 @@ AstBody {
             Function(
                 Function {
                     name: Some(
-                        "main",
+                        "count",
                     ),
-                    inputs: [],
-                    body: Block(
-                        [
-                            Statement(
-                                Var(
-                                    Variable {
-                                        name: "test",
-                                        node_id: 0,
-                                        ty: None,
-                                        visibility: Private,
-                                        assignment: Some(
-                                            New(
-                                                NewCall {
-                                                    name: "Test",
-                                                    arguments: [],
-                                                },
-                                            ),
-                                        ),
-                                    },
+                    inputs: [
+                        FunctionInput {
+                            name: "x",
+                            ty: Some(
+                                BuiltIn(
+                                    Short,
                                 ),
                             ),
-                            Member(
-                                MemberListNode {
-                                    name: Call(
-                                        Call {
-                                            name: "print",
-                                            arguments: [],
-                                        },
+                        },
+                        FunctionInput {
+                            name: "y",
+                            ty: Some(
+                                BuiltIn(
+                                    Strict(
+                                        U8,
                                     ),
-                                    origin: Token(
-                                        Identifier,
-                                        360..364,
-                                        Some(
-                                            "test",
-                                        ),
-                                    ),
-                                    lookup: Dynamic,
-                                },
+                                ),
                             ),
-                            EndOfLine,
-                        ],
+                        },
+                    ],
+                    body: Block(
+                        [],
                     ),
                     outputs: [],
                     visibility: Public,
