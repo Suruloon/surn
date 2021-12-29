@@ -1,0 +1,6 @@
+# compile if php {
+// This is a translation that allows runtime usage of objects and surn
+class Object {
+    priv nodes: int[];
+    priv keys: Map;
+}

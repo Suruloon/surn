@@ -186,6 +186,16 @@ pub struct Operation {
     pub right: Box<Expression>,
     pub op: AnyOperation,
 }
+
+impl Operation {
+    pub fn new(left: Expression, op: AnyOperation, right: Expression) -> Operation {
+        Operation {
+            left: Box::new(left),
+            right: Box::new(right),
+            op,
+        }
+    }
+}
 // }}
 
 // Statements {{

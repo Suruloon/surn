@@ -24,5 +24,6 @@ pub fn test_parse_expressions() {
     let contents = fs::read_to_string(EXPRESSIONS).unwrap();
     let mut parser = Parser::new(CompilerOptions::dev());
     let body = parser.parse_script("tests/parser/test.surn".to_string(), contents);
-    dbg!(body);
+    let mut f = File::create("tests/resources/test.surn.txt").unwrap();
+    f.write_all(format!("{:#?}", body).as_bytes()).unwrap();
 }

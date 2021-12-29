@@ -4,7 +4,7 @@ use crate::{
     ast::{
         Array, AstBody, Call, Class, ClassAllowedStatement, ClassBody, ClassProperty, Expression,
         Function, FunctionInput, Literal, MemberListNode, MemberLookup, Namespace, NewCall, Object,
-        ObjectProperty, Operation, Path, Return, Statement, Static, Variable, Visibility,
+        ObjectProperty, Operation, Path, Return, Statement, Static, Variable, Visibility, ops::AnyOperation,
     },
     lexer::{
         analysis::analyze,
@@ -85,8 +85,29 @@ impl AstGenerator {
             return;
         }
 
-        if let Some(expr) = self.parse_expression() {
-            self.body.push_expression(expr);
+        if let Some(left) = self.parse_expression() {
+            self.skip_whitespace();
+            if let Some(ops) = self.tokens.first_if(|t| t.kind().is_operator()) {
+                self.skip_whitespace();
+                if let Some(op) = AnyOperation::from_string(ops.value().unwrap()) {
+                    self.skip_whitespace();
+                    if let Some(right) = self.parse_expression() {
+                        let instruction = Operation::new(left, op, right);
+                        self.body.push_expression(Expression::Operation(instruction));
+                        return;
+                    }
+                } else {
+                    create_report!(
+                        self.context,
+                        ops.range(),
+                        "Unknown operator: {}".to_string(),
+                        ops.value().unwrap()
+                    );
+                }
+            } else {
+                self.body.push_expression(left);
+            }
+
             return;
         }
 
@@ -1096,16 +1117,10 @@ impl AstGenerator {
             return Some(Expression::Object(object_expr));
         }
 
-        // parse an operator expression
-        if let Some(operator_expr) = self.parse_operator_expression() {
-            return Some(Expression::Operation(operator_expr));
-        }
-
         // parse a literal expression
         if let Some(literal_expr) = self.parse_literal_expression() {
             return Some(Expression::Literal(literal_expr));
         }
-
         return None;
     }
 
@@ -1331,10 +1346,6 @@ impl AstGenerator {
             }
         }
         return None;
-    }
-
-    fn parse_operator_expression(&mut self) -> Option<Operation> {
-        None
     }
 
     fn parse_literal_expression(&mut self) -> Option<Literal> {

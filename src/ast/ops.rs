@@ -7,6 +7,45 @@ pub enum AnyOperation {
     AssignmentOp(AssignmentOp),
 }
 
+impl AnyOperation {
+    pub fn from_string(value: String) -> Option<AnyOperation> {
+        return match value.as_str() {
+            "=" => Some(AnyOperation::AssignmentOp(AssignmentOp::Eq)),
+            "+=" => Some(AnyOperation::AssignmentOp(AssignmentOp::Add)),
+            "-=" => Some(AnyOperation::AssignmentOp(AssignmentOp::Sub)),
+            "*=" => Some(AnyOperation::AssignmentOp(AssignmentOp::Mul)),
+            "/=" => Some(AnyOperation::AssignmentOp(AssignmentOp::Div)),
+            "%=" => Some(AnyOperation::AssignmentOp(AssignmentOp::Rem)),
+            "&=" => Some(AnyOperation::AssignmentOp(AssignmentOp::BitAnd)),
+            "|=" => Some(AnyOperation::AssignmentOp(AssignmentOp::BitOr)),
+            "^=" => Some(AnyOperation::AssignmentOp(AssignmentOp::BitXor)),
+            "<<=" => Some(AnyOperation::AssignmentOp(AssignmentOp::BitSh1)),
+            ">>=" => Some(AnyOperation::AssignmentOp(AssignmentOp::BitShr)),
+            "==" => Some(AnyOperation::ComparisonOp(ComparisonOp::Eq)),
+            "!=" => Some(AnyOperation::ComparisonOp(ComparisonOp::NotEq)),
+            "<" => Some(AnyOperation::ComparisonOp(ComparisonOp::LessThan)),
+            ">" => Some(AnyOperation::ComparisonOp(ComparisonOp::GreaterThan)),
+            "<=" => Some(AnyOperation::ComparisonOp(ComparisonOp::LessThanOrEqual)),
+            ">=" => Some(AnyOperation::ComparisonOp(ComparisonOp::GreaterThanOrEqual)),
+            "<<" => Some(AnyOperation::BinOp(BinOp::Shl)),
+            ">>" => Some(AnyOperation::BinOp(BinOp::Shr)),
+            "&" => Some(AnyOperation::BinOp(BinOp::And)),
+            "|" => Some(AnyOperation::BinOp(BinOp::Or)),
+            "^" => Some(AnyOperation::BinOp(BinOp::Caret)),
+            "&&" => Some(AnyOperation::LogicalOp(LogicalOp::And)),
+            "||" => Some(AnyOperation::LogicalOp(LogicalOp::Or)),
+            "!" => Some(AnyOperation::BinOp(BinOp::Not)),
+            "~" => Some(AnyOperation::BinOp(BinOp::Flip)),
+            "-" => Some(AnyOperation::BinOp(BinOp::Minus)),
+            "+" => Some(AnyOperation::BinOp(BinOp::Plus)),
+            "*" => Some(AnyOperation::BinOp(BinOp::Star)),
+            "/" => Some(AnyOperation::BinOp(BinOp::Slash)),
+            "%" => Some(AnyOperation::BinOp(BinOp::Percent)),
+            _ => None,
+        };
+    }
+}
+
 // Binary Operators
 #[derive(Clone, PartialEq, Debug)]
 pub enum BinOp {
@@ -28,6 +67,12 @@ pub enum BinOp {
     // ^
     Caret,
 
+    // !
+    Not,
+
+    // Complementary
+    Flip,
+
     // &
     And,
 
@@ -35,7 +80,7 @@ pub enum BinOp {
     Or,
 
     // <<
-    Sh1,
+    Shl,
 
     // >>
     Shr,
@@ -109,6 +154,8 @@ pub enum ComparisonOp {
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum AssignmentOp {
+    Eq,
+
     // x += y
     Add,
 
@@ -124,17 +171,17 @@ pub enum AssignmentOp {
     // x %= y
     Rem,
 
-    And,
+    BitAnd,
 
-    Or,
+    BitOr,
 
-    Xor,
+    BitXor,
 
-    Sh1,
+    BitSh1,
 
-    Shr,
+    BitShr,
 
-    Ushr,
+    BitUshr,
 
     // [EXPERIMENT] x &&= y
     BoolAnd,
