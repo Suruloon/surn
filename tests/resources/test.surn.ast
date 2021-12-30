@@ -1,0 +1,410 @@
+AstBody {
+    flags: 0,
+    program: [
+        Statement(
+            Namespace(
+                Namespace {
+                    path: Path {
+                        name: "Test",
+                        parts: [],
+                    },
+                    body: Some(
+                        Block(
+                            [
+                                Statement(
+                                    Var(
+                                        Variable {
+                                            name: "x",
+                                            node_id: 0,
+                                            ty: None,
+                                            visibility: Private,
+                                            assignment: Some(
+                                                Call(
+                                                    Call {
+                                                        name: "function_call",
+                                                        arguments: [
+                                                            Literal(
+                                                                Literal {
+                                                                    value: "10",
+                                                                    ty: None,
+                                                                },
+                                                            ),
+                                                            Literal(
+                                                                Literal {
+                                                                    value: "x",
+                                                                    ty: None,
+                                                                },
+                                                            ),
+                                                        ],
+                                                    },
+                                                ),
+                                            ),
+                                        },
+                                    ),
+                                ),
+                                Statement(
+                                    Var(
+                                        Variable {
+                                            name: "apple",
+                                            node_id: 0,
+                                            ty: None,
+                                            visibility: Private,
+                                            assignment: Some(
+                                                Object(
+                                                    Object {
+                                                        properties: [
+                                                            ObjectProperty {
+                                                                name: "test",
+                                                                value: Literal(
+                                                                    Literal {
+                                                                        value: "10",
+                                                                        ty: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        ],
+                                                        ty: None,
+                                                    },
+                                                ),
+                                            ),
+                                        },
+                                    ),
+                                ),
+                                Statement(
+                                    Var(
+                                        Variable {
+                                            name: "test2",
+                                            node_id: 0,
+                                            ty: None,
+                                            visibility: Private,
+                                            assignment: Some(
+                                                Member(
+                                                    MemberListNode {
+                                                        name: Member(
+                                                            MemberListNode {
+                                                                name: Call(
+                                                                    Call {
+                                                                        name: "crazy",
+                                                                        arguments: [
+                                                                            Call(
+                                                                                Call {
+                                                                                    name: "foo",
+                                                                                    arguments: [
+                                                                                        Literal(
+                                                                                            Literal {
+                                                                                                value: "10",
+                                                                                                ty: None,
+                                                                                            },
+                                                                                        ),
+                                                                                    ],
+                                                                                },
+                                                                            ),
+                                                                            Literal(
+                                                                                Literal {
+                                                                                    value: "bob",
+                                                                                    ty: None,
+                                                                                },
+                                                                            ),
+                                                                        ],
+                                                                    },
+                                                                ),
+                                                                origin: Token(
+                                                                    Identifier,
+                                                                    211..213,
+                                                                    Some(
+                                                                        "is",
+                                                                    ),
+                                                                ),
+                                                                lookup: Static,
+                                                            },
+                                                        ),
+                                                        origin: Token(
+                                                            Identifier,
+                                                            206..210,
+                                                            Some(
+                                                                "this",
+                                                            ),
+                                                        ),
+                                                        lookup: Dynamic,
+                                                    },
+                                                ),
+                                            ),
+                                        },
+                                    ),
+                                ),
+                                Statement(
+                                    Var(
+                                        Variable {
+                                            name: "test",
+                                            node_id: 0,
+                                            ty: None,
+                                            visibility: Private,
+                                            assignment: Some(
+                                                Literal(
+                                                    Literal {
+                                                        value: "This is a test string",
+                                                        ty: None,
+                                                    },
+                                                ),
+                                            ),
+                                        },
+                                    ),
+                                ),
+                                Statement(
+                                    Var(
+                                        Variable {
+                                            name: "apple2",
+                                            node_id: 0,
+                                            ty: None,
+                                            visibility: Private,
+                                            assignment: None,
+                                        },
+                                    ),
+                                ),
+                                Literal(
+                                    Literal {
+                                        value: "public",
+                                        ty: None,
+                                    },
+                                ),
+                                Statement(
+                                    Var(
+                                        Variable {
+                                            name: "test3",
+                                            node_id: 0,
+                                            ty: None,
+                                            visibility: Private,
+                                            assignment: Some(
+                                                Literal(
+                                                    Literal {
+                                                        value: "This is a test string that is public",
+                                                        ty: None,
+                                                    },
+                                                ),
+                                            ),
+                                        },
+                                    ),
+                                ),
+                                Statement(
+                                    Function(
+                                        Function {
+                                            name: Some(
+                                                "testMain",
+                                            ),
+                                            inputs: [],
+                                            body: Block(
+                                                [
+                                                    Statement(
+                                                        Var(
+                                                            Variable {
+                                                                name: "test",
+                                                                node_id: 0,
+                                                                ty: None,
+                                                                visibility: Private,
+                                                                assignment: Some(
+                                                                    New(
+                                                                        NewCall {
+                                                                            name: "Test",
+                                                                            arguments: [],
+                                                                        },
+                                                                    ),
+                                                                ),
+                                                            },
+                                                        ),
+                                                    ),
+                                                    Operation(
+                                                        Operation {
+                                                            left: Literal(
+                                                                Literal {
+                                                                    value: "1",
+                                                                    ty: None,
+                                                                },
+                                                            ),
+                                                            right: Literal(
+                                                                Literal {
+                                                                    value: "3",
+                                                                    ty: None,
+                                                                },
+                                                            ),
+                                                            op: BinOp(
+                                                                Plus,
+                                                            ),
+                                                        },
+                                                    ),
+                                                    EndOfLine,
+                                                    Operation(
+                                                        Operation {
+                                                            left: Literal(
+                                                                Literal {
+                                                                    value: "true",
+                                                                    ty: None,
+                                                                },
+                                                            ),
+                                                            right: Literal(
+                                                                Literal {
+                                                                    value: "false",
+                                                                    ty: None,
+                                                                },
+                                                            ),
+                                                            op: BinOp(
+                                                                Plus,
+                                                            ),
+                                                        },
+                                                    ),
+                                                    EndOfLine,
+                                                    Member(
+                                                        MemberListNode {
+                                                            name: Call(
+                                                                Call {
+                                                                    name: "print",
+                                                                    arguments: [],
+                                                                },
+                                                            ),
+                                                            origin: Token(
+                                                                Identifier,
+                                                                463..467,
+                                                                Some(
+                                                                    "test",
+                                                                ),
+                                                            ),
+                                                            lookup: Dynamic,
+                                                        },
+                                                    ),
+                                                    EndOfLine,
+                                                ],
+                                            ),
+                                            outputs: [],
+                                            visibility: Public,
+                                            node_id: 0,
+                                        },
+                                    ),
+                                ),
+                            ],
+                        ),
+                    ),
+                },
+            ),
+        ),
+        Statement(
+            Function(
+                Function {
+                    name: Some(
+                        "main",
+                    ),
+                    inputs: [],
+                    body: Block(
+                        [
+                            Statement(
+                                Class(
+                                    Class {
+                                        name: "Test",
+                                        extends: None,
+                                        implements: None,
+                                        body: ClassBody {
+                                            properties: [],
+                                            methods: [],
+                                            other: [
+                                                Property(
+                                                    ClassProperty {
+                                                        name: "none",
+                                                        visibility: Public,
+                                                        ty: Some(
+                                                            BuiltIn(
+                                                                String,
+                                                            ),
+                                                        ),
+                                                        assignment: None,
+                                                    },
+                                                ),
+                                                Method(
+                                                    Function {
+                                                        name: Some(
+                                                            "construct",
+                                                        ),
+                                                        inputs: [],
+                                                        body: Block(
+                                                            [
+                                                                Member(
+                                                                    MemberListNode {
+                                                                        name: Operation(
+                                                                            Operation {
+                                                                                left: Literal(
+                                                                                    Literal {
+                                                                                        value: "none",
+                                                                                        ty: None,
+                                                                                    },
+                                                                                ),
+                                                                                right: Literal(
+                                                                                    Literal {
+                                                                                        value: "This is a new initialized value",
+                                                                                        ty: None,
+                                                                                    },
+                                                                                ),
+                                                                                op: AssignmentOp(
+                                                                                    Eq,
+                                                                                ),
+                                                                            },
+                                                                        ),
+                                                                        origin: Token(
+                                                                            Identifier,
+                                                                            633..637,
+                                                                            Some(
+                                                                                "this",
+                                                                            ),
+                                                                        ),
+                                                                        lookup: Dynamic,
+                                                                    },
+                                                                ),
+                                                                EndOfLine,
+                                                            ],
+                                                        ),
+                                                        outputs: [],
+                                                        visibility: Public,
+                                                        node_id: 0,
+                                                    },
+                                                ),
+                                                Method(
+                                                    Function {
+                                                        name: Some(
+                                                            "print",
+                                                        ),
+                                                        inputs: [],
+                                                        body: Block(
+                                                            [
+                                                                Call(
+                                                                    Call {
+                                                                        name: "print",
+                                                                        arguments: [
+                                                                            Literal(
+                                                                                Literal {
+                                                                                    value: "${this.none}",
+                                                                                    ty: None,
+                                                                                },
+                                                                            ),
+                                                                        ],
+                                                                    },
+                                                                ),
+                                                                EndOfLine,
+                                                            ],
+                                                        ),
+                                                        outputs: [],
+                                                        visibility: Public,
+                                                        node_id: 0,
+                                                    },
+                                                ),
+                                            ],
+                                        },
+                                        node_id: 1,
+                                    },
+                                ),
+                            ),
+                        ],
+                    ),
+                    outputs: [],
+                    visibility: Public,
+                    node_id: 0,
+                },
+            ),
+        ),
+    ],
+}
