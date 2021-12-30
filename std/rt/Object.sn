@@ -1,6 +1,36 @@
-# compile if php {
-// This is a translation that allows runtime usage of objects and surn
-class Object {
-    priv nodes: int[];
-    priv keys: Map;
+#use if transpiler_has_feature(STATEMENT_OBJECT);
+#use if transpiler_has_feature(STD_LIB);
+
+// An object is not a class, but a class can be interpreted as an object.
+// implement is an STD-ONLY feature.
+implement Object has_maybe(*class) overrides default {
+    fn initialized(): bool {
+        compiler! {
+            if self.is_class() {
+                self.allocate(
+                    self.class.initialized_offset,
+                    self.class.initialized_size,
+                    self.class.initialized_align,
+                )
+            } else {
+                proceed!();
+            }
+        }
+    }
+
+    fn keys(): string[] {
+        compiler! {
+            // check if this is a class
+            if self.is_class() {
+                // construct properties (keys)
+                export! {
+                    self.body.filter(|st| st.is_property()).map(|st| st.name);
+                };
+            } else {
+                export!{
+                    self.properties.keys()
+                }
+            }
+        }
+    }
 }

@@ -14,6 +14,12 @@ pub mod ops;
 ///  - `some_function()`
 #[derive(Debug, Clone)]
 pub enum Expression {
+    /// An Awaited expression.
+    /// For example:
+    /// ```ts
+    /// await something();
+    /// ```
+    Await(Box<Expression>),
     /// A regular function call.
     ///
     /// For example:

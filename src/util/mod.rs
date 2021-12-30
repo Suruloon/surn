@@ -101,7 +101,21 @@ pub trait StreamBuffer {
     /// Finds the next item in the buffer that matches the predicate.
     /// only after the first predicate is true.
     ///
-    /// Returns `None` if the `find` function is never true.
+    /// Returns a tuple that matches the following:
+    /// 1. The index of the item that matched the predicate starting from 0
+    /// 2. The item that matched the predicate
+    /// Example:
+    /// ```rust
+    /// let mut iter = TokenStream::new("a            z");
+    /// iter.peek();
+    /// assert_eq!(
+    ///     iter.find_after(
+    ///         |x| x.is_alphabetic(),
+    ///         |x| x.is_whitespace()
+    ///     ),
+    ///     Some('z')
+    /// ); // (14, 'z')
+    /// ```
     fn find_after(
         &mut self,
         find: impl Fn(&Self::Item) -> bool,
@@ -119,6 +133,9 @@ pub trait StreamBuffer {
         }
     }
 
+
+    /// Similar to `find_after`, but returns the `nth` item of the buffer without consuming it.
+    /// If the `nth` item is not found, it will return `None`.
     fn find_after_nth(
         &mut self,
         nth: usize,

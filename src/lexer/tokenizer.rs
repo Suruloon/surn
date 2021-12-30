@@ -26,6 +26,15 @@ impl Cursor<'_> {
             );
         }
 
+        if let Some(comment) = self.eat_comment() {
+            return token!(
+                start_pos,
+                self.get_pos(),
+                TokenType::Comment,
+                Some(comment)
+            );
+        }
+
         if let Some(operator) = self.eat_operator() {
             return token!(
                 start_pos,
@@ -83,6 +92,37 @@ impl Cursor<'_> {
 
         self.peek();
         return None;
+    }
+
+    fn eat_comment(&mut self) -> Option<String> {
+        return match self.first() {
+            '/' => {
+                // check the next character
+                if self.second() == '/' {
+                    Some(self.eat_while(|c| c != '\n'))
+                } else if self.second() == '*' {
+                    // eat the comment
+                    let comment = self.eat_while_cursor(|cursor, c| {
+                        if c == '*' {
+                            if cursor.first() == '/' {
+                                cursor.eat();
+                                return false;
+                            } else {
+                                return true;
+                            }
+                        } else {
+                            return true;
+                        }
+                    });
+                    Some(comment)
+                } else {
+                    None
+                }
+            },
+            _ => {
+                None
+            }
+        };
     }
 
     /// This may be misleading,

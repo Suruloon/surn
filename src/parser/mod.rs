@@ -86,28 +86,7 @@ impl AstGenerator {
         }
 
         if let Some(left) = self.parse_expression() {
-            self.skip_whitespace();
-            if let Some(ops) = self.tokens.first_if(|t| t.kind().is_operator()) {
-                self.skip_whitespace();
-                if let Some(op) = AnyOperation::from_string(ops.value().unwrap()) {
-                    self.skip_whitespace();
-                    if let Some(right) = self.parse_expression() {
-                        let instruction = Operation::new(left, op, right);
-                        self.body.push_expression(Expression::Operation(instruction));
-                        return;
-                    }
-                } else {
-                    create_report!(
-                        self.context,
-                        ops.range(),
-                        "Unknown operator: {}".to_string(),
-                        ops.value().unwrap()
-                    );
-                }
-            } else {
-                self.body.push_expression(left);
-            }
-
+            self.body.push_expression(left);
             return;
         }
 
@@ -178,6 +157,7 @@ impl AstGenerator {
             if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                 // we need to parse a path now.
                 loop {
+                    self.skip_whitespace();
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_backslash()) {
                         if let Some(ident) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                             path.push(ident.value().unwrap());
@@ -188,12 +168,27 @@ impl AstGenerator {
                                 "Expected identifier after backslash.".to_string()
                             );
                         }
-                    } else if let Some(_) = self.tokens.first_if(|t| t.kind().is_left_brace()) {
+                    } else if let Some((amt, _)) = self.tokens.find_after(|t| t.kind().is_left_brace(), |t| t.kind().is_whitespace()) {
+                        self.tokens.peek_inc(amt);
                         if let Some(block) = self.parse_block() {
-                            return Some(Namespace {
-                                path: Path::from(name.value().unwrap(), path),
-                                body: Some(Box::new(Statement::Block(block))),
-                            });
+                            if let Some(_) =self.tokens.peek_if(|t| t.kind().is_statement_end()) {
+                                return Some(Namespace {
+                                    path: Path::from(name.value().unwrap(), path),
+                                    body: Some(Box::new(Statement::Block(block))),
+                                });
+                            } else {
+                                create_report!(
+                                    self.context,
+                                    self.tokens.first().unwrap().range(),
+                                    "Expected statement end after namespace statement.".to_string()
+                                );
+                            }
+                        } else {
+                            create_report!(
+                                self.context,
+                                self.tokens.first().unwrap().range(),
+                                "Expected block after namespace with opening brace.".to_string()
+                            );
                         }
                     } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
                         return Some(Namespace {
@@ -902,6 +897,7 @@ impl AstGenerator {
                         );
                     }
                 } else {
+                    println!("{:?}", self.tokens.first().unwrap());
                     create_report!(
                         self.context,
                         self.tokens.first().unwrap().range(),
@@ -1085,43 +1081,79 @@ impl AstGenerator {
     /// - `x + 5`
     /// - `x + 5 * y`
     fn parse_expression(&mut self) -> Option<Expression> {
+        // We're storing this operand in a variable so we can return it later.
+        // We will be using this to parse operations.
+        let mut left: Option<Expression> = None;
+
         // parse a statement expression
         // this needs to be before object parsing because
         // object expressions will assume a block check has already taken place.
         if let Some(statement_expr) = self.parse_statement() {
-            return Some(Expression::Statement(Box::new(statement_expr)));
+            left = Some(Expression::Statement(Box::new(statement_expr)));
         }
 
         // parse a call expression
         if let Some(call_expr) = self.parse_call_expression() {
-            return Some(Expression::Call(call_expr));
+            left = Some(Expression::Call(call_expr));
         }
 
         // parse a member expression
         if let Some(member_expr) = self.parse_member_expression() {
-            return Some(Expression::Member(member_expr));
+            left = Some(Expression::Member(member_expr));
         }
 
         // parse a new expression
         if let Some(new_expr) = self.parse_new_expression() {
-            return Some(Expression::New(new_expr));
+            left = Some(Expression::New(new_expr));
         }
 
         // parse an array
         if let Some(array_expr) = self.parse_array_expression() {
-            return Some(Expression::Array(array_expr));
+            left = Some(Expression::Array(array_expr));
         }
 
-        // parse an object
         if let Some(object_expr) = self.parse_object_expression() {
-            return Some(Expression::Object(object_expr));
+            left = Some(Expression::Object(object_expr));
         }
 
-        // parse a literal expression
         if let Some(literal_expr) = self.parse_literal_expression() {
-            return Some(Expression::Literal(literal_expr));
+            left = Some(Expression::Literal(literal_expr));
         }
-        return None;
+
+        // check left
+        if let Some(left) = left {
+            self.skip_whitespace();
+            // check whitespace
+            if let Some(ops) = self.tokens.peek_if(|t| t.kind().is_operator()) {
+                self.skip_whitespace();
+                if let Some(op) = AnyOperation::from_string(ops.value().unwrap()) {
+                    // we have an operation!
+                    self.skip_whitespace();
+                    if let Some(right) = self.parse_expression() {
+                        let instruction = Operation::new(left, op, right);
+                        return Some(Expression::Operation(instruction));
+                    } else {
+                        create_report!(
+                            self.context,
+                            self.tokens.first().unwrap().range(),
+                            "Expected an expression to follow an operation.".to_string(),
+                            "An expression is expected here.".to_string()
+                        );
+                    }
+                } else {
+                    create_report!(
+                        self.context,
+                        ops.range(),
+                        "Unknown operator: {}".to_string(),
+                        ops.value().unwrap()
+                    );
+                }
+            } else {
+                return Some(left);
+            }
+        } else {
+            return None;
+        }
     }
 
     fn parse_call_expression(&mut self) -> Option<Call> {
@@ -1423,7 +1455,7 @@ impl AstGenerator {
 
     fn skip_whitespace_err(&mut self, err: &'static str) {
         let start = self.tokens.first().unwrap().range().start;
-        match self.tokens.peek_until(|t| !t.kind().is_whitespace()) {
+        match self.tokens.peek_until(|t| !t.kind().is_whitespace() && !t.kind().is_comment()) {
             None => {
                 create_report!(
                     self.context,
@@ -1437,7 +1469,7 @@ impl AstGenerator {
 
     fn skip_whitespace(&mut self) {
         self.tokens.peek_until(|t| {
-            if t.kind().is_whitespace() {
+            if t.kind().is_whitespace() || t.kind().is_comment() {
                 return false;
             } else {
                 return true;
