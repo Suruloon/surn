@@ -1,4 +1,4 @@
-use crate::{
+use crate::compiler::{
     lexer::{keyword::KeyWord, token::Token},
     types::{TypeDefinition, TypeKind},
 };

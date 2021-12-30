@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{Expression, Literal};
+use crate::compiler::ast::{Expression, Literal};
 
 /// This is all the different kind of types that may exist.
 

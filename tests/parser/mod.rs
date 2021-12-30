@@ -5,7 +5,7 @@ use std::{
     io::Write,
 };
 
-use surn::{parser::Parser, CompilerOptions};
+use surn::compiler::{parser::Parser, CompilerOptions};
 
 pub const FULL_TEST: &str = "tests/resources/test_a.surn";
 pub const EXPRESSIONS: &str = "tests/resources/expressions.surn";

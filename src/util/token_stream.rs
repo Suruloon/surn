@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::lexer::token::Token;
+use crate::compiler::lexer::token::Token;
 
 use super::StreamBuffer;
 

@@ -1,6 +1,6 @@
 use std::fs;
 
-use surn::lexer::{token::TokenType, tokenizer::tokenize};
+use surn::compiler::lexer::{token::TokenType, tokenizer::tokenize};
 
 // Tests the tokenizer with the given file.
 pub const TEST_A: &str = "tests/resources/test_a.surn";

@@ -1,6 +1,6 @@
 use std::process;
 
-use crate::{
+use crate::compiler::{
     ast::{
         Array, AstBody, Call, Class, ClassAllowedStatement, ClassBody, ClassProperty, Expression,
         Function, FunctionInput, Literal, MemberListNode, MemberLookup, Namespace, NewCall, Object,
@@ -12,12 +12,11 @@ use crate::{
         token::{Token, TokenType},
         tokenizer::tokenize,
     },
-    report::Report,
     types::{BuiltInType, TypeDefinition, TypeKind, TypeParam, TypeReference, TypeUnion},
-    util::{source::SourceBuffer, StreamBuffer, TokenStream},
     CompilerOptions,
 };
-
+use crate::util::{source::SourceBuffer, StreamBuffer, TokenStream};
+use crate::report::Report;
 use self::context::{Context, ContextFlag, ContextStore, SourceOrigin};
 
 pub mod context;
