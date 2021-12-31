@@ -181,8 +181,6 @@ impl ContextStore {
 pub struct Context {
     pub source: SourceOrigin,
     pub body: AstBody,
-    pub(crate) flags: ContextFlag,
-    pub(crate) types: TypeStore,
     pub(crate) origin: u64,
     local_id: u64,
 }
@@ -192,8 +190,6 @@ impl Context {
         Self {
             source,
             body: AstBody::new(),
-            flags: ContextFlag::None,
-            types: TypeStore::new(),
             origin: id,
             local_id: 0,
         }

@@ -50,7 +50,7 @@ impl TypeKind {
         TypeKind::Reference(TypeReference::new(context, params))
     }
 
-    pub fn runtime_type(name: String) -> Self {
+    pub fn runtime_type(_name: String) -> Self {
         TypeKind::RuntimeType(RuntimeType::empty())
     }
 

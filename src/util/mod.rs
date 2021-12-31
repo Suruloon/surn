@@ -133,7 +133,6 @@ pub trait StreamBuffer {
         }
     }
 
-
     /// Similar to `find_after`, but returns the `nth` item of the buffer without consuming it.
     /// If the `nth` item is not found, it will return `None`.
     fn find_after_nth(

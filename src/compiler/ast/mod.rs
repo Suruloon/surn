@@ -439,7 +439,7 @@ pub struct Class {
 }
 
 impl Class {
-    pub fn new(visibility: Visibility) -> Self {
+    pub fn new() -> Self {
         Class {
             name: String::new(),
             extends: None,
@@ -532,8 +532,8 @@ pub struct Function {
     pub inputs: Vec<FunctionInput>,
     /// The body of the function,
     pub body: Box<Statement>,
-    /// The return types of the function,
-    pub outputs: Vec<TypeKind>,
+    /// The return type of the function.
+    pub outputs: Option<TypeKind>,
     /// The visibilty of the function.
     pub visibility: Visibility,
     /// The id for the given function.
@@ -548,10 +548,7 @@ pub struct FunctionInput {
 
 impl FunctionInput {
     pub fn new(name: String, ty: Option<TypeKind>) -> Self {
-        FunctionInput {
-            name,
-            ty,
-        }
+        FunctionInput { name, ty }
     }
 }
 
