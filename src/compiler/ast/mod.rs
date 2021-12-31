@@ -1,10 +1,12 @@
+pub mod ops;
+pub mod types;
+
 use crate::compiler::{
     lexer::{keyword::KeyWord, token::Token},
-    types::{TypeDefinition, TypeKind},
 };
 
+use self::types::{TypeDefinition, TypeKind};
 use self::ops::AnyOperation;
-pub mod ops;
 
 // Expressions {{
 

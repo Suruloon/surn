@@ -8,11 +8,11 @@ use crate::compiler::{
         Namespace, NewCall, Object, ObjectProperty, Operation, Path, Return, Statement, Static,
         Variable, Visibility,
     },
+    ast::types::{BuiltInType, TypeDefinition, TypeKind, TypeParam, TypeReference, TypeUnion},
     lexer::{
         keyword::KeyWord,
         token::{Token, TokenType},
     },
-    types::{BuiltInType, TypeDefinition, TypeKind, TypeParam, TypeReference, TypeUnion},
 };
 
 use super::context::{Context, SourceOrigin};

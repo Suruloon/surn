@@ -2,7 +2,6 @@ pub mod ast;
 pub mod error;
 pub mod lexer;
 pub mod parser;
-pub mod types;
 
 pub const CURRENT_VERSION: &'static str = "0.0.1-alpha.rc.1";
 pub const NIGHTLY_VERSION: &'static str = "0.0.1-alpha.rc.1";

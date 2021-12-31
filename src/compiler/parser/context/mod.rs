@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs::OpenOptions, io::Read, path::PathBuf};
 
-use crate::compiler::{ast::AstBody, types::TypeStore};
+use crate::compiler::ast::AstBody;
 
 #[derive(Debug, Clone, PartialEq)]
 #[repr(u8)]
