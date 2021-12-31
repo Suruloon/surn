@@ -1,14 +1,14 @@
-struct SurnRegistry {
-    char *lang_name;
-    char *lang_desc;
-    version lang_version;
-    int api_version;
-};
-
 struct Version {
     int major;
     int minor;
     int patch;
+};
+
+struct SurnRegistry {
+    char *lang_name;
+    char *lang_desc;
+    struct Version lang_version;
+    int api_version;
 };
 
 struct SurnAST {
@@ -23,5 +23,5 @@ enum AstNode {
     Macro = 3,
 };
 
-extern SurnRegistry register();
-extern void transform(SurnAST *ast);
+extern void register_surn(struct SurnRegistry* reg);
+extern char* transform(struct SurnAST* ast);
