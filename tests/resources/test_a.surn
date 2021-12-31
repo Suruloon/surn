@@ -1,3 +1,4 @@
+use Foo\bar\baz;
 namespace Test\Bob;
 class Test extends TestA implements Bob, Bob2 {
     pub x: string;
@@ -10,7 +11,7 @@ class Test extends TestA implements Bob, Bob2 {
         print('${this.x}, world!');
     }
 
-    pub static fn write(value: string): Self {
+    pub stat fn write(value: string): Self {
         var self = new Self();
 
         return self;
