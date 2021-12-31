@@ -37,7 +37,9 @@ Here's an example that compiles the following code to JS.
 The **surn** code:
 
 ```rust
-var hello: format<string> = "Hello, {?}";
+use std::fmt;
+
+var hello: string = "Hello, {?}";
 var world: string = "World!";
 
 pub fn main() {
