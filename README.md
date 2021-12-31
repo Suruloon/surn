@@ -98,7 +98,7 @@ Translates to:
  * @std: std-js options: [mangled: true]
  *
  * Copyright (c) 2021, Suruloon Studios. All rights reserved.
- * Licensed under the CC-1 License.
+ * Licensed under the CC0-1.0 License.
  */
 function a1krm(_e, _d) {
     return _e.split('{?}').join(_d);
