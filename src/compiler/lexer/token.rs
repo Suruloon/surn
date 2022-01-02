@@ -1,4 +1,4 @@
-use crate::lexer::keyword::KeyWord;
+use crate::compiler::lexer::keyword::KeyWord;
 use std::ops::Range;
 
 #[derive(Debug, Clone, PartialEq)]

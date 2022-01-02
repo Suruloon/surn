@@ -1,26 +1,26 @@
-use std::process;
+// Home of the Surn Parser.
+use std::{ops::Range, process};
 
-use crate::{
+use crate::compiler::{
     ast::{
-        Array, AstBody, Call, Class, ClassAllowedStatement, ClassBody, ClassProperty, Expression,
-        Function, FunctionInput, Literal, MemberListNode, MemberLookup, Namespace, NewCall, Object,
-        ObjectProperty, Operation, Path, Return, Statement, Static, Variable, Visibility, ops::AnyOperation,
+        ops::AnyOperation, Array, AstBody, Call, Class, ClassAllowedStatement, ClassBody,
+        ClassProperty, Expression, Function, FunctionInput, Literal, MemberListNode, MemberLookup,
+        Namespace, NewCall, Object, ObjectProperty, Operation, Path, Return, Statement, Static,
+        Variable, Visibility,
+    },
+    ast::{
+        types::{BuiltInType, TypeDefinition, TypeKind, TypeParam, TypeReference, TypeUnion},
+        Node,
     },
     lexer::{
-        analysis::analyze,
         keyword::KeyWord,
         token::{Token, TokenType},
-        tokenizer::tokenize,
     },
-    report::Report,
-    types::{BuiltInType, TypeDefinition, TypeKind, TypeParam, TypeReference, TypeUnion},
-    util::{source::SourceBuffer, StreamBuffer, TokenStream},
-    CompilerOptions,
 };
 
-use self::context::{Context, ContextFlag, ContextStore, SourceOrigin};
-
-pub mod context;
+use super::context::{Context, SourceOrigin};
+use crate::report::Report;
+use crate::util::{source::SourceBuffer, StreamBuffer, TokenStream};
 
 macro_rules! create_report {
     ($ctx: expr, $location: expr, $message: expr) => {
@@ -80,13 +80,29 @@ impl AstGenerator {
 
     fn parse(&mut self) {
         // attempt to parse a statement
+        let start = {
+            if let Some(token) = self.tokens.first() {
+                token.range()
+            } else {
+                Range { start: 0, end: 0 }
+            }
+        };
+
         if let Some(stmt) = self.parse_statement() {
-            self.body.push_statement(stmt);
+            self.body.push_node(Node::new(
+                stmt.into(),
+                start,
+                self.tokens.prev().unwrap().range(),
+            ));
             return;
         }
 
         if let Some(left) = self.parse_expression() {
-            self.body.push_expression(left);
+            self.body.push_node(Node::new(
+                left.into(),
+                start,
+                self.tokens.prev().unwrap().range(),
+            ));
             return;
         }
 
@@ -168,10 +184,13 @@ impl AstGenerator {
                                 "Expected identifier after backslash.".to_string()
                             );
                         }
-                    } else if let Some((amt, _)) = self.tokens.find_after(|t| t.kind().is_left_brace(), |t| t.kind().is_whitespace()) {
+                    } else if let Some((amt, _)) = self
+                        .tokens
+                        .find_after(|t| t.kind().is_left_brace(), |t| t.kind().is_whitespace())
+                    {
                         self.tokens.peek_inc(amt);
                         if let Some(block) = self.parse_block() {
-                            if let Some(_) =self.tokens.peek_if(|t| t.kind().is_statement_end()) {
+                            if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
                                 return Some(Namespace {
                                     path: Path::from(name.value().unwrap(), path),
                                     body: Some(Box::new(Statement::Block(block))),
@@ -298,6 +317,7 @@ impl AstGenerator {
             // check if the next token is an indentifier
             if let Some(identifier) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                 let mut type_node: Option<TypeKind> = None;
+                // (&mut type_node).take();
 
                 // token is an identifier!
                 // we need to check if a colon follows, if so, we need to parse a type, otherwise we can skip
@@ -409,7 +429,7 @@ impl AstGenerator {
             .tokens
             .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Function))
         {
-            let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
+            let _ = self.parse_visibility().unwrap_or(Visibility::Private);
             let mut name: Option<String> = None;
             self.skip_whitespace_err("A function input list was expected but none was found.");
             if let Some(n) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
@@ -452,10 +472,9 @@ impl AstGenerator {
         return None;
     }
 
-    fn parse_function_inputs(&mut self) -> Option<(Vec<FunctionInput>, Vec<TypeKind>)> {
+    fn parse_function_inputs(&mut self) -> Option<(Vec<FunctionInput>, Option<TypeKind>)> {
         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_parenthesis()) {
             let mut inputs: Vec<FunctionInput> = Vec::new();
-            let mut returns: Vec<TypeKind> = Vec::new();
             while !self.tokens.is_eof() {
                 self.skip_whitespace_err("Function declaration arguments must be closed.");
                 if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_parenthesis()) {
@@ -489,7 +508,10 @@ impl AstGenerator {
                                 if let Some(_) =
                                     self.tokens.peek_if(|t| t.kind().is_right_parenthesis())
                                 {
-                                    inputs.push(FunctionInput::new(param_name.value().unwrap(), Some(type_smt)));
+                                    inputs.push(FunctionInput::new(
+                                        param_name.value().unwrap(),
+                                        Some(type_smt),
+                                    ));
                                     break;
                                 } else {
                                     // we don't have a right parenthesis!
@@ -529,6 +551,8 @@ impl AstGenerator {
                 }
             }
 
+            let mut returns: Option<TypeKind> = None;
+
             // we're outside the function input list now, we need to check for a colon, again
             // if there is none, "void" is assumed
             if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
@@ -537,7 +561,7 @@ impl AstGenerator {
                     "Expected a return type statement after a function declaration.",
                 );
                 if let Some(type_smt) = self.parse_type_kind() {
-                    // todo: Push the type statement to the return type list
+                    returns = Some(type_smt);
                 } else {
                     create_report!(
                         self.context,
@@ -756,10 +780,7 @@ impl AstGenerator {
         return None;
     }
 
-    fn parse_class_allowed_statement(
-        &mut self,
-        visibility: Option<Visibility>,
-    ) -> Option<ClassAllowedStatement> {
+    fn parse_class_allowed_statement(&mut self) -> Option<ClassAllowedStatement> {
         // check for visibility
         let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
         if let Some(_) = self
@@ -809,7 +830,6 @@ impl AstGenerator {
                 );
             }
         }
-        return None;
     }
 
     fn parse_class_body(&mut self) -> Option<ClassBody> {
@@ -832,7 +852,7 @@ impl AstGenerator {
                     body.properties.push(property);
                 } else if let Some(method) = self.parse_function() {
                     body.methods.push(method);
-                } else if let Some(other) = self.parse_class_allowed_statement(None) {
+                } else if let Some(other) = self.parse_class_allowed_statement() {
                     body.other.push(other);
                 } else {
                     create_report!(
@@ -933,18 +953,18 @@ impl AstGenerator {
     }
 
     /// Similar to `parse_statement` but it will not consume the token stream,
-    fn get_visibility(&mut self) -> Option<Visibility> {
-        if let Some(modifier) = self
-            .tokens
-            .first_if(|t| t.kind().is_keyword() && t.kind().as_keyword().is_visibility())
-        {
-            let visibility = Visibility::from_keyword(modifier.kind().as_keyword());
+    // fn get_visibility(&mut self) -> Option<Visibility> {
+    //     if let Some(modifier) = self
+    //         .tokens
+    //         .first_if(|t| t.kind().is_keyword() && t.kind().as_keyword().is_visibility())
+    //     {
+    //         let visibility = Visibility::from_keyword(modifier.kind().as_keyword());
 
-            return Some(visibility);
-        } else {
-            return None;
-        }
-    }
+    //         return Some(visibility);
+    //     } else {
+    //         return None;
+    //     }
+    // }
 
     /// Parses a type kind.
     /// For example:
@@ -1384,10 +1404,12 @@ impl AstGenerator {
         // we have a literal, we need to parse a value.
         // a literal is either a string, number, boolean or null
         // either way we need to check if the next token is a identifier.
-        if let Some(v) = self
-            .tokens
-            .peek_if(|t| t.kind().is_identifier() || t.kind().is_number() || t.kind().is_string() || t.kind().is_boolean())
-        {
+        if let Some(v) = self.tokens.peek_if(|t| {
+            t.kind().is_identifier()
+                || t.kind().is_number()
+                || t.kind().is_string()
+                || t.kind().is_boolean()
+        }) {
             return Some(Literal::new(v.value().unwrap(), None));
         } else {
             return None;
@@ -1455,7 +1477,10 @@ impl AstGenerator {
 
     fn skip_whitespace_err(&mut self, err: &'static str) {
         let start = self.tokens.first().unwrap().range().start;
-        match self.tokens.peek_until(|t| !t.kind().is_whitespace() && !t.kind().is_comment()) {
+        match self
+            .tokens
+            .peek_until(|t| !t.kind().is_whitespace() && !t.kind().is_comment())
+        {
             None => {
                 create_report!(
                     self.context,
@@ -1475,49 +1500,5 @@ impl AstGenerator {
                 return true;
             }
         });
-    }
-}
-
-/// The parser struct.
-/// This contains the context of the AST as well as information
-/// regarding errors and warnings with the source code.
-pub struct Parser {
-    options: CompilerOptions,
-    contexts: ContextStore,
-}
-
-impl Parser {
-    pub fn new(options: CompilerOptions) -> Self {
-        Parser {
-            options,
-            contexts: ContextStore::new(),
-        }
-    }
-
-    pub fn parse_script(&mut self, name: String, source: String) -> AstBody {
-        // create a source origin for the script
-        let source_origin = SourceOrigin::new_virtual(name, source.clone());
-        // because we're going to be parsing a single script, we can use a new astgenerator.
-        let mut ast_generator = AstGenerator::new(source_origin, self.contexts.next_context_id());
-        // add the generators context to our parser.
-        self.contexts.add_context(&mut ast_generator.context);
-
-        // lets tokenize the source code.
-        let tokens = tokenize(source.as_str());
-
-        // do our options with compiler options
-        self.do_options(&tokens);
-
-        // time to parse.
-        let ast = ast_generator.begin_parse(TokenStream::new(tokens)); // parse the tokens.
-
-        return ast;
-    }
-
-    pub(crate) fn do_options(&self, tokens: &Vec<Token>) {
-        if self.options.semantic_checks == true {
-            // do semantic checks
-            analyze(tokens.clone());
-        }
     }
 }

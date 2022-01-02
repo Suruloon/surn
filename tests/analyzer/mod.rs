@@ -1,7 +1,7 @@
 use std::fs;
 
-use surn::lexer::analysis::analyze;
-use surn::lexer::tokenizer::tokenize;
+use surn::compiler::lexer::analysis::analyze;
+use surn::compiler::lexer::tokenizer::tokenize;
 
 // Tests the tokenizer with the given file.
 pub const TEST_A: &str = "tests/resources/test_a.surn";

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{Expression, Literal};
+use crate::compiler::ast::{Expression, Literal};
 
 /// This is all the different kind of types that may exist.
 
@@ -50,7 +50,7 @@ impl TypeKind {
         TypeKind::Reference(TypeReference::new(context, params))
     }
 
-    pub fn runtime_type(name: String) -> Self {
+    pub fn runtime_type(_name: String) -> Self {
         TypeKind::RuntimeType(RuntimeType::empty())
     }
 

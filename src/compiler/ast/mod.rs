@@ -1,10 +1,56 @@
-use crate::{
-    lexer::{keyword::KeyWord, token::Token},
-    types::{TypeDefinition, TypeKind},
-};
+pub mod ops;
+pub mod types;
+
+use std::ops::Range;
+
+use crate::compiler::lexer::{keyword::KeyWord, token::Token};
 
 use self::ops::AnyOperation;
-pub mod ops;
+use self::types::{BuiltInType, TypeDefinition, TypeKind};
+
+#[derive(Debug, Clone)]
+pub enum NodeKind {
+    Statement(Statement),
+    Expression(Expression),
+}
+
+impl From<Expression> for NodeKind {
+    fn from(expression: Expression) -> Self {
+        NodeKind::Expression(expression)
+    }
+}
+
+impl From<Statement> for NodeKind {
+    fn from(statement: Statement) -> Self {
+        NodeKind::Statement(statement)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Node {
+    pub start: Range<usize>,
+    pub end: Range<usize>,
+    pub inner: NodeKind,
+}
+
+impl Node {
+    pub fn new(inner: NodeKind, start: Range<usize>, end: Range<usize>) -> Self {
+        Self { start, end, inner }
+    }
+
+    pub fn inner(&self) -> NodeKind {
+        self.inner.clone()
+    }
+
+    /// Gets the entire nodes range.
+    pub fn start(&self) -> usize {
+        self.start.clone().start
+    }
+
+    pub fn end(&self) -> usize {
+        self.end.clone().end
+    }
+}
 
 // Expressions {{
 
@@ -225,6 +271,12 @@ pub enum Statement {
     Function(Function),
     /// A class declaration.
     Class(Class),
+    /// An Enum
+    Enum(Enum),
+    /// A trait.
+    // Trait(Trait),
+    /// A interface
+    // Interface(Interface),
     /// A block statment
     Block(Vec<Expression>),
     /// A import statement.
@@ -439,7 +491,7 @@ pub struct Class {
 }
 
 impl Class {
-    pub fn new(visibility: Visibility) -> Self {
+    pub fn new() -> Self {
         Class {
             name: String::new(),
             extends: None,
@@ -510,6 +562,33 @@ impl ClassAllowedStatement {
     }
 }
 
+/// An enum.
+#[derive(Debug, Clone)]
+pub struct Enum {
+    pub name: String,
+    pub variants: Vec<EnumVariant>,
+    pub start_at: Option<Literal>,
+}
+
+impl Enum {
+    pub fn new() -> Self {
+        Enum {
+            name: String::new(),
+            variants: Vec::new(),
+            start_at: Some(Literal::new(
+                "0".into(),
+                Some(TypeKind::BuiltIn(BuiltInType::Int)),
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumVariant {
+    pub name: String,
+    pub value: Option<Expression>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Return {
     pub expression: Option<Expression>,
@@ -532,8 +611,8 @@ pub struct Function {
     pub inputs: Vec<FunctionInput>,
     /// The body of the function,
     pub body: Box<Statement>,
-    /// The return types of the function,
-    pub outputs: Vec<TypeKind>,
+    /// The return type of the function.
+    pub outputs: Option<TypeKind>,
     /// The visibilty of the function.
     pub visibility: Visibility,
     /// The id for the given function.
@@ -548,10 +627,7 @@ pub struct FunctionInput {
 
 impl FunctionInput {
     pub fn new(name: String, ty: Option<TypeKind>) -> Self {
-        FunctionInput {
-            name,
-            ty,
-        }
+        FunctionInput { name, ty }
     }
 }
 
@@ -714,7 +790,7 @@ pub struct CompilerMacro {
 pub struct AstBody {
     // todo: Compiler flags
     flags: u64,
-    program: Vec<Expression>,
+    program: Vec<Node>,
 }
 
 impl AstBody {
@@ -725,16 +801,11 @@ impl AstBody {
         }
     }
 
-    pub fn push_statement(&mut self, statement: Statement) {
-        self.program
-            .push(Expression::Statement(Box::new(statement)));
+    pub fn push_node(&mut self, node: Node) {
+        self.program.push(node);
     }
 
-    pub fn push_expression(&mut self, expression: Expression) {
-        self.program.push(expression);
-    }
-
-    pub fn get_program(&self) -> &Vec<Expression> {
+    pub fn get_program(&self) -> &Vec<Node> {
         &self.program
     }
 }

@@ -27,12 +27,7 @@ impl Cursor<'_> {
         }
 
         if let Some(comment) = self.eat_comment() {
-            return token!(
-                start_pos,
-                self.get_pos(),
-                TokenType::Comment,
-                Some(comment)
-            );
+            return token!(start_pos, self.get_pos(), TokenType::Comment, Some(comment));
         }
 
         if let Some(operator) = self.eat_operator() {
@@ -118,10 +113,8 @@ impl Cursor<'_> {
                 } else {
                     None
                 }
-            },
-            _ => {
-                None
             }
+            _ => None,
         };
     }
 
