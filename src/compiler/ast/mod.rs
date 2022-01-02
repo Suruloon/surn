@@ -3,12 +3,10 @@ pub mod types;
 
 use std::ops::Range;
 
-use crate::compiler::{
-    lexer::{keyword::KeyWord, token::Token},
-};
+use crate::compiler::lexer::{keyword::KeyWord, token::Token};
 
-use self::types::{TypeDefinition, TypeKind};
 use self::ops::AnyOperation;
+use self::types::{BuiltInType, TypeDefinition, TypeKind};
 
 #[derive(Debug, Clone)]
 pub enum NodeKind {
@@ -37,11 +35,7 @@ pub struct Node {
 
 impl Node {
     pub fn new(inner: NodeKind, start: Range<usize>, end: Range<usize>) -> Self {
-        Self {
-            start,
-            end,
-            inner
-        }
+        Self { start, end, inner }
     }
 
     pub fn inner(&self) -> NodeKind {
@@ -277,6 +271,12 @@ pub enum Statement {
     Function(Function),
     /// A class declaration.
     Class(Class),
+    /// An Enum
+    Enum(Enum),
+    /// A trait.
+    // Trait(Trait),
+    /// A interface
+    // Interface(Interface),
     /// A block statment
     Block(Vec<Expression>),
     /// A import statement.
@@ -560,6 +560,33 @@ impl ClassAllowedStatement {
     pub fn new_static(s: ClassAllowedStatement) -> Self {
         ClassAllowedStatement::Static(Box::new(s))
     }
+}
+
+/// An enum.
+#[derive(Debug, Clone)]
+pub struct Enum {
+    pub name: String,
+    pub variants: Vec<EnumVariant>,
+    pub start_at: Option<Literal>,
+}
+
+impl Enum {
+    pub fn new() -> Self {
+        Enum {
+            name: String::new(),
+            variants: Vec::new(),
+            start_at: Some(Literal::new(
+                "0".into(),
+                Some(TypeKind::BuiltIn(BuiltInType::Int)),
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumVariant {
+    pub name: String,
+    pub value: Option<Expression>,
 }
 
 #[derive(Debug, Clone)]
