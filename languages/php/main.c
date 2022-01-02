@@ -11,7 +11,6 @@ extern void register_surn(struct SurnRegistry* reg) {
     reg->lang_desc = lang_desc;
     reg->lang_version = lang_version;
     reg->api_version = api_version;
-    return reg;
 };
 
 extern char* transform(struct SurnAST* ast) {

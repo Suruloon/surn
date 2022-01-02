@@ -1,5 +1,5 @@
 // Home of the Surn Parser.
-use std::process;
+use std::{process, ops::Range};
 
 use crate::compiler::{
     ast::{
@@ -8,7 +8,7 @@ use crate::compiler::{
         Namespace, NewCall, Object, ObjectProperty, Operation, Path, Return, Statement, Static,
         Variable, Visibility,
     },
-    ast::types::{BuiltInType, TypeDefinition, TypeKind, TypeParam, TypeReference, TypeUnion},
+    ast::{types::{BuiltInType, TypeDefinition, TypeKind, TypeParam, TypeReference, TypeUnion}, Node},
     lexer::{
         keyword::KeyWord,
         token::{Token, TokenType},
@@ -77,13 +77,21 @@ impl AstGenerator {
 
     fn parse(&mut self) {
         // attempt to parse a statement
+        let start = {
+            if let Some(token) = self.tokens.first() {
+                token.range()
+            } else {
+                Range { start: 0, end: 0 }
+            }
+        };
+
         if let Some(stmt) = self.parse_statement() {
-            self.body.push_statement(stmt);
+            self.body.push_node(Node::new(stmt.into(), start, self.tokens.prev().unwrap().range()));
             return;
         }
 
         if let Some(left) = self.parse_expression() {
-            self.body.push_expression(left);
+            self.body.push_node(Node::new(left.into(), start, self.tokens.prev().unwrap().range()));
             return;
         }
 

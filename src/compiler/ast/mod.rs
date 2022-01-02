@@ -1,12 +1,62 @@
 pub mod ops;
 pub mod types;
 
+use std::ops::Range;
+
 use crate::compiler::{
     lexer::{keyword::KeyWord, token::Token},
 };
 
 use self::types::{TypeDefinition, TypeKind};
 use self::ops::AnyOperation;
+
+#[derive(Debug, Clone)]
+pub enum NodeKind {
+    Statement(Statement),
+    Expression(Expression),
+}
+
+impl From<Expression> for NodeKind {
+    fn from(expression: Expression) -> Self {
+        NodeKind::Expression(expression)
+    }
+}
+
+impl From<Statement> for NodeKind {
+    fn from(statement: Statement) -> Self {
+        NodeKind::Statement(statement)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Node {
+    pub start: Range<usize>,
+    pub end: Range<usize>,
+    pub inner: NodeKind,
+}
+
+impl Node {
+    pub fn new(inner: NodeKind, start: Range<usize>, end: Range<usize>) -> Self {
+        Self {
+            start,
+            end,
+            inner
+        }
+    }
+
+    pub fn inner(&self) -> NodeKind {
+        self.inner.clone()
+    }
+
+    /// Gets the entire nodes range.
+    pub fn start(&self) -> usize {
+        self.start.clone().start
+    }
+
+    pub fn end(&self) -> usize {
+        self.end.clone().end
+    }
+}
 
 // Expressions {{
 
@@ -713,7 +763,7 @@ pub struct CompilerMacro {
 pub struct AstBody {
     // todo: Compiler flags
     flags: u64,
-    program: Vec<Expression>,
+    program: Vec<Node>,
 }
 
 impl AstBody {
@@ -724,16 +774,11 @@ impl AstBody {
         }
     }
 
-    pub fn push_statement(&mut self, statement: Statement) {
-        self.program
-            .push(Expression::Statement(Box::new(statement)));
+    pub fn push_node(&mut self, node: Node) {
+        self.program.push(node);
     }
 
-    pub fn push_expression(&mut self, expression: Expression) {
-        self.program.push(expression);
-    }
-
-    pub fn get_program(&self) -> &Vec<Expression> {
+    pub fn get_program(&self) -> &Vec<Node> {
         &self.program
     }
 }
