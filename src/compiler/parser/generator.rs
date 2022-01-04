@@ -142,7 +142,7 @@ impl AstGenerator {
                 self.tokens.first().unwrap().kind().to_string()
             ),
             "Unable to proceed parsing. This token was unexpected at this time.".to_string(),
-            combine_ranges(vec![start, self.tokens.prev().unwrap().range()]),
+            combine_ranges(vec![start, self.tokens.first().unwrap().range()]),
             self.body.clone(),
         ));
     }
@@ -1503,7 +1503,7 @@ impl AstGenerator {
     }
 
     fn skip_whitespace_err(&mut self, err: &'static str) {
-        let start = self.tokens.first().unwrap().range().start;
+        let start = self.tokens.first().expect(err).range().start;
         match self
             .tokens
             .peek_until(|t| !t.kind().is_whitespace() && !t.kind().is_comment())
