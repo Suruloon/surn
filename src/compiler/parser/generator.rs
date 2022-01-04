@@ -18,7 +18,10 @@ use crate::compiler::{
     },
 };
 
-use super::context::{Context, SourceOrigin};
+use super::{
+    context::{Context, SourceOrigin},
+    ParserError,
+};
 use crate::report::Report;
 use crate::util::{source::SourceBuffer, StreamBuffer, TokenStream};
 
@@ -49,6 +52,20 @@ macro_rules! create_report {
     };
 }
 
+pub fn combine_ranges(ranges: Vec<Range<usize>>) -> Range<usize> {
+    let mut start = 0;
+    let mut end = 0;
+    for range in ranges.iter() {
+        if range.start < start {
+            start = range.start;
+        }
+        if range.end > end {
+            end = range.end;
+        }
+    }
+    start..end
+}
+
 pub struct AstGenerator {
     pub(crate) body: AstBody,
     pub(crate) tokens: TokenStream,
@@ -67,18 +84,18 @@ impl AstGenerator {
         }
     }
 
-    pub fn begin_parse(&mut self, tokens: TokenStream) -> AstBody {
+    pub fn begin_parse(&mut self, tokens: TokenStream) -> Result<AstBody, ParserError> {
         self.tokens = tokens;
 
         while !self.tokens.is_eof() {
             self.skip_whitespace();
-            self.parse();
+            self.parse()?;
         }
 
-        return self.body.clone();
+        return Ok(self.body.clone());
     }
 
-    fn parse(&mut self) {
+    fn parse(&mut self) -> Result<(), ParserError> {
         // attempt to parse a statement
         let start = {
             if let Some(token) = self.tokens.first() {
@@ -88,22 +105,22 @@ impl AstGenerator {
             }
         };
 
-        if let Some(stmt) = self.parse_statement() {
+        if let Some(stmt) = self.parse_statement()? {
             self.body.push_node(Node::new(
                 stmt.into(),
                 start,
                 self.tokens.prev().unwrap().range(),
             ));
-            return;
+            return Ok(());
         }
 
-        if let Some(left) = self.parse_expression() {
+        if let Some(left) = self.parse_expression()? {
             self.body.push_node(Node::new(
                 left.into(),
                 start,
                 self.tokens.prev().unwrap().range(),
             ));
-            return;
+            return Ok(());
         }
 
         if self
@@ -114,56 +131,56 @@ impl AstGenerator {
             .is_whitespace()
         {
             self.tokens.peek();
-            return;
+            return Ok(());
         }
 
         // we don't know what this is!
         // the only body we can have is a statement or an expression
-        create_report!(
-            self.context,
-            self.tokens.first().unwrap().range(),
-            "Unable to proceed parsing. This token was unexpected at this time.".to_string(),
+        return Err(ParserError::new(
             format!(
                 "Unexpected token: {}",
-                self.tokens.peek().unwrap().kind().to_string()
-            )
-        );
+                self.tokens.first().unwrap().kind().to_string()
+            ),
+            "Unable to proceed parsing. This token was unexpected at this time.".to_string(),
+            combine_ranges(vec![start, self.tokens.prev().unwrap().range()]),
+            self.body.clone(),
+        ));
     }
 
     /// A statement can be a variable declaration, function declaration, class declaration, etc.
-    fn parse_statement(&mut self) -> Option<Statement> {
-        if let Some(namespace) = self.parse_namespace() {
-            return Some(Statement::Namespace(namespace));
+    fn parse_statement(&mut self) -> Result<Option<Statement>, ParserError> {
+        if let Some(namespace) = self.parse_namespace()? {
+            return Ok(Some(Statement::Namespace(namespace)));
         }
 
         // Try to parse a static statement (this is obsolete in global context, but can exist)
         // this is transpiled to a GLOBALS class.
-        if let Some(stmt) = self.parse_static() {
-            return Some(stmt);
+        if let Some(stmt) = self.parse_static()? {
+            return Ok(Some(stmt));
         }
 
         // try to parse a mutable or constant variable.
-        if let Some((var, constant)) = self.parse_variable() {
+        if let Some((var, constant)) = self.parse_variable()? {
             if constant {
-                return Some(Statement::Const(var));
+                return Ok(Some(Statement::Const(var)));
             } else {
-                return Some(Statement::Var(var));
+                return Ok(Some(Statement::Var(var)));
             }
         }
 
         // try to parse a function declaration
-        if let Some(func) = self.parse_function() {
-            return Some(Statement::Function(func));
+        if let Some(func) = self.parse_function()? {
+            return Ok(Some(Statement::Function(func)));
         }
 
-        if let Some(class) = self.parse_class() {
-            return Some(Statement::Class(class));
+        if let Some(class) = self.parse_class()? {
+            return Ok(Some(Statement::Class(class)));
         }
 
-        return None;
+        return Ok(None);
     }
 
-    fn parse_namespace(&mut self) -> Option<Namespace> {
+    fn parse_namespace(&mut self) -> Result<Option<Namespace>, ParserError> {
         if let Some(_) = self
             .tokens
             .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Namespace))
@@ -189,12 +206,12 @@ impl AstGenerator {
                         .find_after(|t| t.kind().is_left_brace(), |t| t.kind().is_whitespace())
                     {
                         self.tokens.peek_inc(amt);
-                        if let Some(block) = self.parse_block() {
+                        if let Some(block) = self.parse_block()? {
                             if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
-                                return Some(Namespace {
+                                return Ok(Some(Namespace {
                                     path: Path::from(name.value().unwrap(), path),
                                     body: Some(Box::new(Statement::Block(block))),
-                                });
+                                }));
                             } else {
                                 create_report!(
                                     self.context,
@@ -210,10 +227,10 @@ impl AstGenerator {
                             );
                         }
                     } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
-                        return Some(Namespace {
+                        return Ok(Some(Namespace {
                             path: Path::from(name.value().unwrap(), path),
                             body: None,
-                        });
+                        }));
                     } else {
                         create_report!(
                             self.context,
@@ -234,12 +251,12 @@ impl AstGenerator {
                 );
             }
         }
-        return None;
+        return Ok(None);
     }
 
     /// Parses a static statement (if plausible).
     /// A static statement can only be declared in classes and will be checked after initial parsing.
-    fn parse_static(&mut self) -> Option<Statement> {
+    fn parse_static(&mut self) -> Result<Option<Statement>, ParserError> {
         // We actually can't parse visibility here, because a static statement may not exist, however,
         // we will parse it later, if visibility is present.
         if let Some(_) = self
@@ -251,12 +268,12 @@ impl AstGenerator {
                 .tokens
                 .second_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Static))
             {
-                let visibility = self.parse_visibility().unwrap();
+                let visibility = self.parse_visibility()?.unwrap();
                 self.tokens.peek();
                 self.skip_whitespace();
                 // We have a static keyword, so we can parse the rest of the statement.
-                if let Some(stmt) = self.parse_statement() {
-                    return Some(Statement::Static(Static::new(visibility, stmt)));
+                if let Some(stmt) = self.parse_statement()? {
+                    return Ok(Some(Statement::Static(Static::new(visibility, stmt))));
                 } else {
                     create_report!(
                         self.context,
@@ -266,7 +283,7 @@ impl AstGenerator {
                     );
                 }
             } else {
-                return None;
+                return Ok(None);
             }
         }
 
@@ -278,8 +295,11 @@ impl AstGenerator {
             self.tokens.peek();
             self.skip_whitespace();
             // We have a static keyword, so we can parse the rest of the statement.
-            if let Some(stmt) = self.parse_statement() {
-                return Some(Statement::Static(Static::new(Visibility::Private, stmt)));
+            if let Some(stmt) = self.parse_statement()? {
+                return Ok(Some(Statement::Static(Static::new(
+                    Visibility::Private,
+                    stmt,
+                ))));
             } else {
                 create_report!(
                     self.context,
@@ -289,7 +309,7 @@ impl AstGenerator {
                 );
             }
         } else {
-            return None;
+            return Ok(None);
         }
     }
 
@@ -298,9 +318,9 @@ impl AstGenerator {
     /// For example:
     /// - `var x = 5`
     /// - `const x = 5`
-    fn parse_variable(&mut self) -> Option<(Variable, bool)> {
+    fn parse_variable(&mut self) -> Result<Option<(Variable, bool)>, ParserError> {
         // check for visibility
-        let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
+        let visibility = self.parse_visibility()?.unwrap_or(Visibility::Private);
         let decl_keyword = self.tokens.peek_if(|t| {
             if t.kind().is_keyword() {
                 return (t.kind().as_keyword() == KeyWord::Const)
@@ -324,7 +344,7 @@ impl AstGenerator {
                 // the type checking and just parse the variable
                 if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
                     // now parse a type statement.
-                    if let Some(type_smt) = self.parse_type_kind() {
+                    if let Some(type_smt) = self.parse_type_kind()? {
                         type_node = Some(type_smt);
                     } else {
                         create_report!(
@@ -349,12 +369,12 @@ impl AstGenerator {
                     // we have an equals operator!
                     // we need to parse an expression
                     self.skip_whitespace_err("An expression was expected but none was found.");
-                    if let Some(expr) = self.parse_expression() {
+                    if let Some(expr) = self.parse_expression()? {
                         // we have an expression!
                         // we need to parse a semicolon
                         self.skip_whitespace_err("A semicolon was expected but none was found.");
                         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
-                            return Some((
+                            return Ok(Some((
                                 Variable::new(
                                     identifier.value().unwrap(),
                                     type_node,
@@ -362,7 +382,7 @@ impl AstGenerator {
                                     Some(expr),
                                 ),
                                 is_constant,
-                            ));
+                            )));
                         } else {
                             create_report!(
                                 self.context,
@@ -386,10 +406,10 @@ impl AstGenerator {
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
                         // we have an end of statement!
                         // we can return a variable declaration
-                        return Some((
+                        return Ok(Some((
                             Variable::new(identifier.value().unwrap(), type_node, visibility, None),
                             is_constant,
-                        ));
+                        )));
                     } else {
                         // we don't have an end of statement!
                         // we need to report an error
@@ -414,7 +434,7 @@ impl AstGenerator {
                 );
             }
         } else {
-            return None;
+            return Ok(None);
         }
     }
 
@@ -424,12 +444,12 @@ impl AstGenerator {
     /// - `function foo() {}`
     /// - `function foo(x, y) {}`
     /// - `function foo(x, y): int {}`
-    fn parse_function(&mut self) -> Option<Function> {
+    fn parse_function(&mut self) -> Result<Option<Function>, ParserError> {
         if let Some(_) = self
             .tokens
             .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Function))
         {
-            let _ = self.parse_visibility().unwrap_or(Visibility::Private);
+            let _ = self.parse_visibility()?.unwrap_or(Visibility::Private);
             let mut name: Option<String> = None;
             self.skip_whitespace_err("A function input list was expected but none was found.");
             if let Some(n) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
@@ -440,18 +460,18 @@ impl AstGenerator {
 
             // we need to parse the input list
             self.skip_whitespace_err("A function input list was expected but none was found.");
-            if let Some((inputs, outputs)) = self.parse_function_inputs() {
+            if let Some((inputs, outputs)) = self.parse_function_inputs()? {
                 // we need a block now.
                 self.skip_whitespace_err("A block was expected but none was found.");
-                if let Some(block) = self.parse_block() {
-                    return Some(Function {
+                if let Some(block) = self.parse_block()? {
+                    return Ok(Some(Function {
                         name,
                         inputs,
                         outputs,
                         body: Box::new(Statement::Block(block)),
                         visibility: Visibility::Public,
                         node_id: 0,
-                    });
+                    }));
                 } else {
                     create_report!(
                         self.context,
@@ -469,10 +489,12 @@ impl AstGenerator {
                 );
             }
         }
-        return None;
+        return Ok(None);
     }
 
-    fn parse_function_inputs(&mut self) -> Option<(Vec<FunctionInput>, Option<TypeKind>)> {
+    fn parse_function_inputs(
+        &mut self,
+    ) -> Result<Option<(Vec<FunctionInput>, Option<TypeKind>)>, ParserError> {
         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_parenthesis()) {
             let mut inputs: Vec<FunctionInput> = Vec::new();
             while !self.tokens.is_eof() {
@@ -491,7 +513,7 @@ impl AstGenerator {
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
                         // now parse a type statement.
                         self.skip_whitespace();
-                        if let Some(type_smt) = self.parse_type_kind() {
+                        if let Some(type_smt) = self.parse_type_kind()? {
                             // we have a type!
                             // we need to parse a comma
                             self.skip_whitespace_err("A comma was expected but none was found.");
@@ -560,7 +582,7 @@ impl AstGenerator {
                 self.skip_whitespace_err(
                     "Expected a return type statement after a function declaration.",
                 );
-                if let Some(type_smt) = self.parse_type_kind() {
+                if let Some(type_smt) = self.parse_type_kind()? {
                     returns = Some(type_smt);
                 } else {
                     create_report!(
@@ -573,13 +595,13 @@ impl AstGenerator {
                 }
             }
 
-            return Some((inputs, returns));
+            return Ok(Some((inputs, returns)));
         }
-        return None;
+        return Ok(None);
     }
 
     /// Parses any class declaration.
-    fn parse_class(&mut self) -> Option<Class> {
+    fn parse_class(&mut self) -> Result<Option<Class>, ParserError> {
         if let Some(_) = self
             .tokens
             .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Class))
@@ -587,17 +609,17 @@ impl AstGenerator {
             self.skip_whitespace();
             if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                 self.skip_whitespace();
-                let extends = self.parse_class_extension();
+                let extends = self.parse_class_extension()?;
                 self.skip_whitespace();
-                let implements: Option<Vec<String>> = self.parse_class_implementation();
-                let body: Option<ClassBody> = self.parse_class_body();
-                return Some(Class {
+                let implements: Option<Vec<String>> = self.parse_class_implementation()?;
+                let body: Option<ClassBody> = self.parse_class_body()?;
+                return Ok(Some(Class {
                     name: name.value().unwrap(),
                     extends,
                     implements,
                     body: body.unwrap_or(ClassBody::new()),
                     node_id: self.context.get_next_local_id(),
-                });
+                }));
             } else {
                 create_report!(
                     self.context,
@@ -610,18 +632,18 @@ impl AstGenerator {
                 );
             }
         } else {
-            return None;
+            return Ok(None);
         }
     }
 
-    fn parse_class_extension(&mut self) -> Option<String> {
+    fn parse_class_extension(&mut self) -> Result<Option<String>, ParserError> {
         if let Some(_) = self
             .tokens
             .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Extends))
         {
             self.skip_whitespace();
             if let Some(path) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
-                return Some(path.value().unwrap());
+                return Ok(Some(path.value().unwrap()));
             } else {
                 create_report!(
                     self.context,
@@ -634,10 +656,10 @@ impl AstGenerator {
                 );
             }
         }
-        return None;
+        return Ok(None);
     }
 
-    fn parse_class_implementation(&mut self) -> Option<Vec<String>> {
+    fn parse_class_implementation(&mut self) -> Result<Option<Vec<String>>, ParserError> {
         if let Some(_) = self
             .tokens
             .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Implements))
@@ -668,7 +690,7 @@ impl AstGenerator {
                 }
 
                 if !self.tokens.is_eof() {
-                    return Some(paths);
+                    return Ok(Some(paths));
                 } else {
                     create_report!(
                         self.context,
@@ -693,19 +715,22 @@ impl AstGenerator {
                 );
             }
         }
-        return None;
+        return Ok(None);
     }
 
     /// This function will attempt to parse a class property, however
     /// it will not parse it if it is not a property.
-    fn parse_class_property(&mut self, visibility: Visibility) -> Option<ClassProperty> {
+    fn parse_class_property(
+        &mut self,
+        visibility: Visibility,
+    ) -> Result<Option<ClassProperty>, ParserError> {
         if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
             let mut type_node: Option<TypeKind> = None;
             // check if there's a type assigned to the property, if not, check for a statement end.
             if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
                 // type statement.
                 self.skip_whitespace();
-                if let Some(kind) = self.parse_type_kind() {
+                if let Some(kind) = self.parse_type_kind()? {
                     type_node = Some(kind);
                 } else {
                     create_report!(
@@ -725,17 +750,17 @@ impl AstGenerator {
                 // we have an equals operator!
                 // we need to parse an expression
                 self.skip_whitespace_err("An expression was expected but none was found.");
-                if let Some(expr) = self.parse_expression() {
+                if let Some(expr) = self.parse_expression()? {
                     // we have an expression!
                     // we need to parse a semicolon
                     self.skip_whitespace_err("A semicolon was expected but none was found.");
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
-                        return Some(ClassProperty::new(
+                        return Ok(Some(ClassProperty::new(
                             name.value().unwrap(),
                             visibility,
                             type_node.clone(),
                             Some(expr),
-                        ));
+                        )));
                     } else {
                         create_report!(
                             self.context,
@@ -758,12 +783,12 @@ impl AstGenerator {
                 if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
                     // we have an end of statement!
                     // we can return a variable declaration
-                    return Some(ClassProperty::new(
+                    return Ok(Some(ClassProperty::new(
                         name.value().unwrap(),
                         visibility,
                         type_node.clone(),
                         None,
-                    ));
+                    )));
                 } else {
                     // we don't have an end of statement!
                     // we need to report an error
@@ -777,27 +802,29 @@ impl AstGenerator {
                 }
             }
         }
-        return None;
+        return Ok(None);
     }
 
-    fn parse_class_allowed_statement(&mut self) -> Option<ClassAllowedStatement> {
+    fn parse_class_allowed_statement(
+        &mut self,
+    ) -> Result<Option<ClassAllowedStatement>, ParserError> {
         // check for visibility
-        let visibility = self.parse_visibility().unwrap_or(Visibility::Private);
+        let visibility = self.parse_visibility()?.unwrap_or(Visibility::Private);
         if let Some(_) = self
             .tokens
             .peek_if(|t| t.kind().is_keyword() && t.kind().as_keyword() == KeyWord::Static)
         {
             self.skip_whitespace();
             // the statement is static
-            if let Some(property) = self.parse_class_property(visibility.clone()) {
-                return Some(ClassAllowedStatement::new_static(
+            if let Some(property) = self.parse_class_property(visibility.clone())? {
+                return Ok(Some(ClassAllowedStatement::new_static(
                     ClassAllowedStatement::Property(property),
-                ));
-            } else if let Some(mut func) = self.parse_function() {
+                )));
+            } else if let Some(mut func) = self.parse_function()? {
                 func.visibility = visibility;
-                return Some(ClassAllowedStatement::new_static(
+                return Ok(Some(ClassAllowedStatement::new_static(
                     ClassAllowedStatement::Method(func),
-                ));
+                )));
             } else {
                 create_report!(
                     self.context,
@@ -813,11 +840,11 @@ impl AstGenerator {
             // the statement is not static
             // Parse a property
             self.skip_whitespace_err("Expected a class statement but none was found.");
-            if let Some(property) = self.parse_class_property(visibility.clone()) {
-                return Some(ClassAllowedStatement::Property(property));
-            } else if let Some(mut func) = self.parse_function() {
+            if let Some(property) = self.parse_class_property(visibility.clone())? {
+                return Ok(Some(ClassAllowedStatement::Property(property)));
+            } else if let Some(mut func) = self.parse_function()? {
                 func.visibility = visibility;
-                return Some(ClassAllowedStatement::Method(func));
+                return Ok(Some(ClassAllowedStatement::Method(func)));
             } else {
                 create_report!(
                     self.context,
@@ -832,7 +859,7 @@ impl AstGenerator {
         }
     }
 
-    fn parse_class_body(&mut self) -> Option<ClassBody> {
+    fn parse_class_body(&mut self) -> Result<Option<ClassBody>, ParserError> {
         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_brace()) {
             let mut body = ClassBody::new();
             // opening a body.
@@ -848,11 +875,11 @@ impl AstGenerator {
                 );
                 if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_brace()) {
                     break;
-                } else if let Some(property) = self.parse_class_property(Visibility::Private) {
+                } else if let Some(property) = self.parse_class_property(Visibility::Private)? {
                     body.properties.push(property);
-                } else if let Some(method) = self.parse_function() {
+                } else if let Some(method) = self.parse_function()? {
                     body.methods.push(method);
-                } else if let Some(other) = self.parse_class_allowed_statement() {
+                } else if let Some(other) = self.parse_class_allowed_statement()? {
                     body.other.push(other);
                 } else {
                     create_report!(
@@ -867,16 +894,16 @@ impl AstGenerator {
                 }
             }
 
-            return Some(body);
+            return Ok(Some(body));
         } else {
-            return None;
+            return Ok(None);
         }
     }
 
     /// Parses any block statement
     /// A block statement is a statement that is surrounded by curly braces
     /// However, this does not include class bodies, as they have special properties.
-    fn parse_block(&mut self) -> Option<Vec<Expression>> {
+    fn parse_block(&mut self) -> Result<Option<Vec<Expression>>, ParserError> {
         // we're expecting the next token to be a brace
         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_brace()) {
             // we have a brace!
@@ -884,7 +911,7 @@ impl AstGenerator {
             let mut expressions: Vec<Expression> = Vec::new();
             while !self.tokens.is_eof() {
                 self.skip_whitespace_err("Expected a statement to follow a block.");
-                if let Some(expr) = self.parse_expression() {
+                if let Some(expr) = self.parse_expression()? {
                     expressions.push(expr);
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_brace()) {
                     // we have a right brace!
@@ -899,7 +926,7 @@ impl AstGenerator {
                     // we have a return statement!
                     // we need to parse the return statement
                     self.skip_whitespace();
-                    if let Some(expr) = self.parse_expression() {
+                    if let Some(expr) = self.parse_expression()? {
                         expressions.push(Expression::Statement(Box::new(Statement::Return(
                             Return::new(Some(expr)),
                         ))));
@@ -926,9 +953,9 @@ impl AstGenerator {
                     );
                 }
             }
-            return Some(expressions);
+            return Ok(Some(expressions));
         } else {
-            return None;
+            return Ok(None);
         }
     }
 
@@ -937,7 +964,7 @@ impl AstGenerator {
     /// > This is an alias for `parse_statement` as it will only parse visibility and static statements.
     /// EG: `public`
     /// EG: `private static`
-    fn parse_visibility(&mut self) -> Option<Visibility> {
+    fn parse_visibility(&mut self) -> Result<Option<Visibility>, ParserError> {
         if let Some(modifier) = self
             .tokens
             .peek_if(|t| t.kind().is_keyword() && t.kind().as_keyword().is_visibility())
@@ -946,9 +973,9 @@ impl AstGenerator {
 
             self.skip_whitespace_err("A statement or static keyword was expected after a visibility modifier but none was found.");
 
-            return Some(visibility);
+            return Ok(Some(visibility));
         } else {
-            return None;
+            return Ok(None);
         }
     }
 
@@ -960,9 +987,9 @@ impl AstGenerator {
     //     {
     //         let visibility = Visibility::from_keyword(modifier.kind().as_keyword());
 
-    //         return Some(visibility);
+    //         return Ok(Some(visibility));
     //     } else {
-    //         return None;
+    //         return Ok(None);
     //     }
     // }
 
@@ -971,7 +998,7 @@ impl AstGenerator {
     /// - `int`
     /// - `string`
     /// - `bool`
-    fn parse_type_kind(&mut self) -> Option<TypeKind> {
+    fn parse_type_kind(&mut self) -> Result<Option<TypeKind>, ParserError> {
         if let Some(initial) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
             let name = initial.value().unwrap();
             // The first token is an identifier! This is good, this is a type kind already, however!,
@@ -1001,7 +1028,7 @@ impl AstGenerator {
                                 .types
                                 .push(TypeKind::Reference(TypeReference::new(
                                     name.value().unwrap(),
-                                    self.parse_type_generics(),
+                                    self.parse_type_generics()?,
                                 )));
                         } else {
                             create_report!(
@@ -1035,22 +1062,22 @@ impl AstGenerator {
                         }
                     }
                 }
-                return Some(TypeKind::Union(Box::new(union_type)));
+                return Ok(Some(TypeKind::Union(Box::new(union_type))));
             } else {
                 if let Some(ty) = BuiltInType::from_string(name.clone()) {
-                    return Some(TypeKind::BuiltIn(ty));
+                    return Ok(Some(TypeKind::BuiltIn(ty)));
                 } else {
-                    return Some(TypeKind::Reference(TypeReference::new(
+                    return Ok(Some(TypeKind::Reference(TypeReference::new(
                         name.clone(),
-                        self.parse_type_generics(),
-                    )));
+                        self.parse_type_generics()?,
+                    ))));
                 }
             }
         }
-        return None;
+        return Ok(None);
     }
 
-    fn parse_type_generics(&mut self) -> Option<Vec<TypeParam>> {
+    fn parse_type_generics(&mut self) -> Result<Option<Vec<TypeParam>>, ParserError> {
         if let Some(_) = self
             .tokens
             .peek_if(|t| t.kind().is_operator() && t.value().unwrap() == "<")
@@ -1060,7 +1087,7 @@ impl AstGenerator {
                 self.skip_whitespace_err(
                     "Expected a type paramater to follow a typed parameter list.",
                 );
-                if let Some(kind) = self.parse_type_kind() {
+                if let Some(kind) = self.parse_type_kind()? {
                     generics.push(TypeParam::new(kind));
                 } else if let Some(_) = self
                     .tokens
@@ -1076,7 +1103,7 @@ impl AstGenerator {
                             "A type paramater is expected here.".to_string()
                         );
                     } else {
-                        return Some(generics);
+                        return Ok(Some(generics));
                     }
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_comma()) {
                     continue;
@@ -1091,7 +1118,7 @@ impl AstGenerator {
             }
         }
 
-        return None;
+        return Ok(None);
     }
 
     /// Parses an expression.
@@ -1100,7 +1127,7 @@ impl AstGenerator {
     /// - `x`
     /// - `x + 5`
     /// - `x + 5 * y`
-    fn parse_expression(&mut self) -> Option<Expression> {
+    fn parse_expression(&mut self) -> Result<Option<Expression>, ParserError> {
         // We're storing this operand in a variable so we can return it later.
         // We will be using this to parse operations.
         let mut left: Option<Expression> = None;
@@ -1108,35 +1135,35 @@ impl AstGenerator {
         // parse a statement expression
         // this needs to be before object parsing because
         // object expressions will assume a block check has already taken place.
-        if let Some(statement_expr) = self.parse_statement() {
+        if let Some(statement_expr) = self.parse_statement()? {
             left = Some(Expression::Statement(Box::new(statement_expr)));
         }
 
         // parse a call expression
-        if let Some(call_expr) = self.parse_call_expression() {
+        if let Some(call_expr) = self.parse_call_expression()? {
             left = Some(Expression::Call(call_expr));
         }
 
         // parse a member expression
-        if let Some(member_expr) = self.parse_member_expression() {
+        if let Some(member_expr) = self.parse_member_expression()? {
             left = Some(Expression::Member(member_expr));
         }
 
         // parse a new expression
-        if let Some(new_expr) = self.parse_new_expression() {
+        if let Some(new_expr) = self.parse_new_expression()? {
             left = Some(Expression::New(new_expr));
         }
 
         // parse an array
-        if let Some(array_expr) = self.parse_array_expression() {
+        if let Some(array_expr) = self.parse_array_expression()? {
             left = Some(Expression::Array(array_expr));
         }
 
-        if let Some(object_expr) = self.parse_object_expression() {
+        if let Some(object_expr) = self.parse_object_expression()? {
             left = Some(Expression::Object(object_expr));
         }
 
-        if let Some(literal_expr) = self.parse_literal_expression() {
+        if let Some(literal_expr) = self.parse_literal_expression()? {
             left = Some(Expression::Literal(literal_expr));
         }
 
@@ -1149,9 +1176,9 @@ impl AstGenerator {
                 if let Some(op) = AnyOperation::from_string(ops.value().unwrap()) {
                     // we have an operation!
                     self.skip_whitespace();
-                    if let Some(right) = self.parse_expression() {
+                    if let Some(right) = self.parse_expression()? {
                         let instruction = Operation::new(left, op, right);
-                        return Some(Expression::Operation(instruction));
+                        return Ok(Some(Expression::Operation(instruction)));
                     } else {
                         create_report!(
                             self.context,
@@ -1169,30 +1196,30 @@ impl AstGenerator {
                     );
                 }
             } else {
-                return Some(left);
+                return Ok(Some(left));
             }
         } else {
-            return None;
+            return Ok(None);
         }
     }
 
-    fn parse_call_expression(&mut self) -> Option<Call> {
+    fn parse_call_expression(&mut self) -> Result<Option<Call>, ParserError> {
         // parse a call expression
         if let Some(identifier) = self.tokens.first_if(|t| t.kind().is_identifier()) {
             // we have an identifier, we need to try to parse function arguments now.
-            if let Some(args) = self.parse_function_call_inputs() {
+            if let Some(args) = self.parse_function_call_inputs()? {
                 // This is definitely a function call.
-                return Some(Call::new(identifier.value().unwrap(), args));
+                return Ok(Some(Call::new(identifier.value().unwrap(), args)));
             } else {
                 // This probably isn't a function call.
-                return None;
+                return Ok(None);
             }
         }
 
-        return None;
+        return Ok(None);
     }
 
-    fn parse_member_expression(&mut self) -> Option<MemberListNode> {
+    fn parse_member_expression(&mut self) -> Result<Option<MemberListNode>, ParserError> {
         // parse a member expression
         if let Some(identifier) = self.tokens.first_if(|t| t.kind().is_identifier()) {
             // we have an identifier, we need to try to parse member expressions now.
@@ -1209,14 +1236,14 @@ impl AstGenerator {
                 self.tokens.peek_inc(2);
                 // we have a period, we need to parse a member expression
                 // we need to parse a member expression
-                if let Some(member_expr) = self.parse_expression() {
+                if let Some(member_expr) = self.parse_expression()? {
                     // we have a member expression, we need to create a member list node
                     println!("Parsed a member node!!");
-                    return Some(MemberListNode::new(
+                    return Ok(Some(MemberListNode::new(
                         member_expr,
                         identifier.clone(),
                         access_kind,
-                    ));
+                    )));
                 } else {
                     // we don't have a member expression, we need to report an error
                     create_report!(
@@ -1228,14 +1255,14 @@ impl AstGenerator {
                 }
             } else {
                 // we don't have a period, this is probably not a member expression
-                return None;
+                return Ok(None);
             }
         }
 
-        return None;
+        return Ok(None);
     }
 
-    fn parse_new_expression(&mut self) -> Option<NewCall> {
+    fn parse_new_expression(&mut self) -> Result<Option<NewCall>, ParserError> {
         if let Some(_) = self
             .tokens
             .first_if(|t| t.kind().is_keyword() && t.kind().as_keyword().is_new())
@@ -1248,9 +1275,9 @@ impl AstGenerator {
             ) {
                 self.tokens.peek_inc(inc);
                 // we have a name, we need to parse a function call inputs.
-                if let Some(args) = self.parse_function_call_inputs() {
+                if let Some(args) = self.parse_function_call_inputs()? {
                     // we have a function call inputs, we need to create a new call.
-                    return Some(NewCall::new(name.value().unwrap(), args));
+                    return Ok(Some(NewCall::new(name.value().unwrap(), args)));
                 } else {
                     // we don't have a function call inputs, we need to report an error.
                     create_report!(
@@ -1270,16 +1297,16 @@ impl AstGenerator {
                 );
             }
         }
-        return None;
+        return Ok(None);
     }
 
-    fn parse_array_expression(&mut self) -> Option<Array> {
+    fn parse_array_expression(&mut self) -> Result<Option<Array>, ParserError> {
         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_bracket()) {
             // inside array
             let mut elements: Vec<Expression> = Vec::new();
             while !self.tokens.is_eof() {
                 self.skip_whitespace_err("Array's must be closed.");
-                if let Some(element) = self.parse_expression() {
+                if let Some(element) = self.parse_expression()? {
                     // we have an expression, we need to parse a comma
                     self.skip_whitespace_err("Array's must be closed.");
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_comma()) {
@@ -1291,7 +1318,7 @@ impl AstGenerator {
                         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_bracket()) {
                             // we have a right bracket, we can return the inputs
                             elements.push(element);
-                            return Some(Array::new(elements, None));
+                            return Ok(Some(Array::new(elements, None)));
                         } else {
                             create_report!(
                                 self.context,
@@ -1303,7 +1330,7 @@ impl AstGenerator {
                     }
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_bracket()) {
                     // end of array
-                    return Some(Array::new(elements, None));
+                    return Ok(Some(Array::new(elements, None)));
                 } else {
                     // we don't have an expression, we need to report an error.
                     create_report!(
@@ -1318,10 +1345,10 @@ impl AstGenerator {
                 }
             }
         }
-        return None;
+        return Ok(None);
     }
 
-    fn parse_object_expression(&mut self) -> Option<Object> {
+    fn parse_object_expression(&mut self) -> Result<Option<Object>, ParserError> {
         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_brace()) {
             // this is definitely an object body.
             let mut object: Object = Object::empty();
@@ -1334,7 +1361,7 @@ impl AstGenerator {
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
                         // we have a colon, we need to parse an expression.
                         self.skip_whitespace_err("Object body must be closed.");
-                        if let Some(expression) = self.parse_expression() {
+                        if let Some(expression) = self.parse_expression()? {
                             // we have an expression, we need to add the property to the object.
                             let prop = ObjectProperty::new(property.value().unwrap(), expression);
 
@@ -1350,7 +1377,7 @@ impl AstGenerator {
                                 {
                                     // we have a right brace, we're done.
                                     object.properties.push(prop);
-                                    return Some(object);
+                                    return Ok(Some(object));
                                 } else {
                                     // we don't have a right brace, we need to report an error.
                                     create_report!(
@@ -1385,7 +1412,7 @@ impl AstGenerator {
                     }
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_brace()) {
                     // end of object
-                    return Some(object);
+                    return Ok(Some(object));
                 } else {
                     // we don't have an object property, we need to report an error.
                     create_report!(
@@ -1397,10 +1424,10 @@ impl AstGenerator {
                 }
             }
         }
-        return None;
+        return Ok(None);
     }
 
-    fn parse_literal_expression(&mut self) -> Option<Literal> {
+    fn parse_literal_expression(&mut self) -> Result<Option<Literal>, ParserError> {
         // we have a literal, we need to parse a value.
         // a literal is either a string, number, boolean or null
         // either way we need to check if the next token is a identifier.
@@ -1410,14 +1437,14 @@ impl AstGenerator {
                 || t.kind().is_string()
                 || t.kind().is_boolean()
         }) {
-            return Some(Literal::new(v.value().unwrap(), None));
+            return Ok(Some(Literal::new(v.value().unwrap(), None)));
         } else {
-            return None;
+            return Ok(None);
         }
     }
 
     /// parses function inputs (aka arguments)
-    fn parse_function_call_inputs(&mut self) -> Option<Vec<Expression>> {
+    fn parse_function_call_inputs(&mut self) -> Result<Option<Vec<Expression>>, ParserError> {
         // parse a function input
         // we need to check for a parenthesis
         if let Some(_) = self.tokens.second_if(|t| t.kind().is_left_parenthesis()) {
@@ -1430,7 +1457,7 @@ impl AstGenerator {
                 // we need to parse an expression
                 self.skip_whitespace_err("Function arguments must be closed.");
 
-                if let Some(expr) = self.parse_expression() {
+                if let Some(expr) = self.parse_expression()? {
                     // we have an expression, we need to parse a comma
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_comma()) {
                         inputs.push(expr);
@@ -1440,7 +1467,7 @@ impl AstGenerator {
                         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_parenthesis()) {
                             // we have a right parenthesis, we can return the inputs
                             inputs.push(expr);
-                            return Some(inputs);
+                            return Ok(Some(inputs));
                         } else {
                             create_report!(
                                 self.context,
@@ -1452,7 +1479,7 @@ impl AstGenerator {
                     }
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_parenthesis()) {
                     // we have a right parenthesis, we can return the inputs
-                    return Some(inputs);
+                    return Ok(Some(inputs));
                 } else {
                     // we don't have an expression, we need to report an error
                     create_report!(
@@ -1472,7 +1499,7 @@ impl AstGenerator {
             );
         }
 
-        return None;
+        return Ok(None);
     }
 
     fn skip_whitespace_err(&mut self, err: &'static str) {

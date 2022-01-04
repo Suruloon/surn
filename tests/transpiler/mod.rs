@@ -13,12 +13,14 @@ pub fn transpile_php() {
     transpiler.register_defaults();
     let contents = fs::read_to_string(EXPRESSIONS).unwrap();
     let mut parser = Parser::new(CompilerOptions::dev());
-    let body = parser.parse_script(EXPRESSIONS.to_string(), contents);
-    let code = transpiler
-        .get("php")
-        .unwrap()
-        .generator
-        .generate_to_string(body, CompilerOptions::dev());
-    let mut f = File::create("tests/resources/test.php").unwrap();
-    f.write_all(code.as_bytes()).unwrap();
+    let result = parser.parse_script(EXPRESSIONS.to_string(), contents);
+    if let Ok(body) = result {
+        let code = transpiler
+            .get("php")
+            .unwrap()
+            .generator
+            .generate_to_string(body, CompilerOptions::dev());
+        let mut f = File::create("tests/resources/test.php").unwrap();
+        f.write_all(code.as_bytes()).unwrap();
+    }
 }

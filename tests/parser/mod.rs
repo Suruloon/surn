@@ -16,7 +16,8 @@ pub fn test_parse() {
     let mut parser = Parser::new(CompilerOptions::dev());
     let body = parser.parse_script("tests/parser/test.surn".to_string(), contents);
     let mut f = File::create("tests/resources/test.surn.ast").unwrap();
-    f.write_all(format!("{:#?}", body).as_bytes()).unwrap();
+    f.write_all(format!("{:#?}", body.unwrap()).as_bytes())
+        .unwrap();
 }
 
 #[test]
@@ -25,5 +26,6 @@ pub fn test_parse_expressions() {
     let mut parser = Parser::new(CompilerOptions::dev());
     let body = parser.parse_script("tests/parser/test.surn".to_string(), contents);
     let mut f = File::create("tests/resources/test.surn.ast").unwrap();
-    f.write_all(format!("{:#?}", body).as_bytes()).unwrap();
+    f.write_all(format!("{:#?}", body.unwrap()).as_bytes())
+        .unwrap();
 }

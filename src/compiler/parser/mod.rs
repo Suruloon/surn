@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::util::TokenStream;
 
 use self::{
@@ -13,6 +15,25 @@ use super::{
 
 pub mod context;
 pub mod generator;
+
+#[derive(Debug, Clone)]
+pub struct ParserError {
+    pub reason: String,
+    pub message: String,
+    pub location: Range<usize>,
+    pub ast: AstBody,
+}
+
+impl ParserError {
+    pub fn new(reason: String, message: String, location: Range<usize>, ast: AstBody) -> Self {
+        ParserError {
+            reason,
+            message,
+            location,
+            ast,
+        }
+    }
+}
 
 /// The parser struct.
 /// This contains the context of the AST as well as information
@@ -30,7 +51,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_script(&mut self, name: String, source: String) -> AstBody {
+    pub fn parse_script(&mut self, name: String, source: String) -> Result<AstBody, ParserError> {
         // create a source origin for the script
         let source_origin = SourceOrigin::new_virtual(name, source.clone());
         // because we're going to be parsing a single script, we can use a new astgenerator.
@@ -45,9 +66,9 @@ impl Parser {
         self.do_options(&tokens);
 
         // time to parse.
-        let ast = ast_generator.begin_parse(TokenStream::new(tokens)); // parse the tokens.
+        let ast = ast_generator.begin_parse(TokenStream::new(tokens))?; // parse the tokens.
 
-        return ast;
+        return Ok(ast);
     }
 
     pub(crate) fn do_options(&self, tokens: &Vec<Token>) {
