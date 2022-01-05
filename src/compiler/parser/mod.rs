@@ -20,18 +20,30 @@ pub mod generator;
 pub struct ParserError {
     pub reason: String,
     pub message: String,
+    pub extra: Option<String>,
     pub location: Range<usize>,
     pub ast: AstBody,
 }
 
 impl ParserError {
-    pub fn new(reason: String, message: String, location: Range<usize>, ast: AstBody) -> Self {
+    pub fn new(
+        reason: String,
+        message: String,
+        location: Range<usize>,
+        ast: AstBody,
+        extra: Option<String>,
+    ) -> Self {
         ParserError {
             reason,
             message,
+            extra,
             location,
             ast,
         }
+    }
+
+    pub fn set_inline(&mut self, inline: String) {
+        self.extra = Some(inline);
     }
 }
 
@@ -68,13 +80,15 @@ impl Parser {
         // time to parse.
         let ast = ast_generator.begin_parse(TokenStream::new(tokens))?; // parse the tokens.
 
+        // remove the context from the parser because it's useless to the parser.
+        self.contexts.remove_context(ast_generator.context.origin);
         return Ok(ast);
     }
 
     pub(crate) fn do_options(&self, tokens: &Vec<Token>) {
         if self.options.semantic_checks == true {
             // do semantic checks
-            analyze(tokens.clone());
+            analyze(tokens.clone()).expect("Error running checks.");
         }
     }
 }

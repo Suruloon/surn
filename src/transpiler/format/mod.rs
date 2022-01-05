@@ -20,7 +20,7 @@ pub struct FormatOptions {
 }
 
 impl FormatOptions {
-    pub fn PSR_4() -> Self {
+    pub fn psr_4() -> Self {
         FormatOptions {
             tab_size: 4,
             indent_size: 4,
@@ -37,7 +37,7 @@ impl FormatOptions {
         }
     }
 
-    pub fn Rust() -> Self {
+    pub fn rust() -> Self {
         FormatOptions {
             tab_size: 4,
             indent_size: 4,
@@ -54,7 +54,7 @@ impl FormatOptions {
         }
     }
 
-    pub fn Default() -> Self {
+    pub fn default() -> Self {
         FormatOptions {
             tab_size: 4,
             indent_size: 4,

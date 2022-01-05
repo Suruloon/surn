@@ -1,5 +1,5 @@
 // Home of the Surn Parser.
-use std::{ops::Range, process};
+use std::ops::Range;
 
 use crate::compiler::{
     ast::{
@@ -22,35 +22,7 @@ use super::{
     context::{Context, SourceOrigin},
     ParserError,
 };
-use crate::report::Report;
-use crate::util::{source::SourceBuffer, StreamBuffer, TokenStream};
-
-macro_rules! create_report {
-    ($ctx: expr, $location: expr, $message: expr) => {
-        Report::new()
-            .set_source(SourceBuffer::new(
-                $ctx.source.clone().get_contents().unwrap(),
-            ))
-            .set_name($ctx.source.clone().name)
-            .set_message("Occurred while parsing".to_string())
-            .make_snippet($location, $message, None)
-            .print();
-        dbg!("At line.");
-        process::exit(1);
-    };
-    ($ctx: expr, $location: expr, $message: expr, $inline: expr) => {
-        Report::new()
-            .set_source(SourceBuffer::new(
-                $ctx.source.clone().get_contents().unwrap(),
-            ))
-            .set_name($ctx.source.clone().name)
-            .set_message("Occurred while parsing".to_string())
-            .make_snippet($location, $message, Some($inline))
-            .print();
-        dbg!("At line.");
-        process::exit(1);
-    };
-}
+use crate::util::{StreamBuffer, TokenStream};
 
 pub fn combine_ranges(ranges: Vec<Range<usize>>) -> Range<usize> {
     let mut start = 0;
@@ -137,13 +109,11 @@ impl AstGenerator {
         // we don't know what this is!
         // the only body we can have is a statement or an expression
         return Err(ParserError::new(
-            format!(
-                "Unexpected token: {}",
-                self.tokens.first().unwrap().kind().to_string()
-            ),
-            "Unable to proceed parsing. This token was unexpected at this time.".to_string(),
+            format!("Missing a valid statement or expression in global scope."),
+            "Unable to proceed parsing. A known token was unexpected at this time.".to_string(),
             combine_ranges(vec![start, self.tokens.first().unwrap().range()]),
             self.body.clone(),
+            None,
         ));
     }
 
@@ -185,6 +155,7 @@ impl AstGenerator {
             .tokens
             .peek_if(|t| t.kind().is_keyword() && (t.kind().as_keyword() == KeyWord::Namespace))
         {
+            let start = self.tokens.first().unwrap().range();
             let mut path: Vec<String> = Vec::new();
             self.skip_whitespace();
             if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
@@ -195,11 +166,13 @@ impl AstGenerator {
                         if let Some(ident) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                             path.push(ident.value().unwrap());
                         } else {
-                            create_report!(
-                                self.context,
-                                self.tokens.first().unwrap().range(),
-                                "Expected identifier after backslash.".to_string()
-                            );
+                            return Err(ParserError::new(
+                                format!("Expected identifier after backslash."),
+                                format!("Namespace sub-directories must always contain a valid identifier. A valid identifier is an expression that contains a letter, number preceeding any letter, or an underscore."),
+                                combine_ranges(vec![start, self.tokens.first().unwrap().range()]),
+                                self.body.clone(),
+                                None
+                            ));
                         }
                     } else if let Some((amt, _)) = self
                         .tokens
@@ -213,18 +186,22 @@ impl AstGenerator {
                                     body: Some(Box::new(Statement::Block(block))),
                                 }));
                             } else {
-                                create_report!(
-                                    self.context,
+                                return Err(ParserError::new(
+                                    "A semi-colon was expected.".to_string(),
+                                    format!("If a namespace is opening a block, it must always end with a semicolon to identify the end of the namespace."),
                                     self.tokens.first().unwrap().range(),
-                                    "Expected statement end after namespace statement.".to_string()
-                                );
+                                    self.body.clone(),
+                                    None
+                                ));
                             }
                         } else {
-                            create_report!(
-                                self.context,
+                            return Err(ParserError::new(
+                                "Expected block after namespace with opening brace.".to_string(),
+                                format!("A statement block must always have an end. Identify the end with a curly brace }}."),
                                 self.tokens.first().unwrap().range(),
-                                "Expected block after namespace with opening brace.".to_string()
-                            );
+                                self.body.clone(),
+                                None
+                            ));
                         }
                     } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
                         return Ok(Some(Namespace {
@@ -232,23 +209,26 @@ impl AstGenerator {
                             body: None,
                         }));
                     } else {
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
+                        return Err(ParserError::new(
                             "Unable to parse namespace path.".to_string(),
-                            format!(
+                            format!("This statement is incomplete. A valid namespace statement contains the namespace keyword followed by a path preceeded with a backslash. A path is a series of identifiers seperated by backslashes."),
+                            combine_ranges(vec![start, self.tokens.first().unwrap().range()]),
+                            self.body.clone(),
+                            Some(format!(
                                 "Unexpected token: {}",
                                 self.tokens.peek().unwrap().kind().to_string()
-                            )
-                        );
+                            ))
+                        ));
                     }
                 }
             } else {
-                create_report!(
-                    self.context,
-                    self.tokens.first().unwrap().range(),
-                    "Expected a namespace name.".to_string()
-                );
+                return Err(ParserError::new(
+                    "Expected a namespace name.".to_string(),
+                    format!("A namespace must always contain a path. A path is a series of identifiers seperated by backslashes."),
+                    combine_ranges(vec![start, self.tokens.first().unwrap().range()]),
+                    self.body.clone(),
+                    None
+                ));
             }
         }
         return Ok(None);
@@ -257,6 +237,7 @@ impl AstGenerator {
     /// Parses a static statement (if plausible).
     /// A static statement can only be declared in classes and will be checked after initial parsing.
     fn parse_static(&mut self) -> Result<Option<Statement>, ParserError> {
+        let start = self.tokens.first().unwrap().range();
         // We actually can't parse visibility here, because a static statement may not exist, however,
         // we will parse it later, if visibility is present.
         if let Some(_) = self
@@ -275,12 +256,13 @@ impl AstGenerator {
                 if let Some(stmt) = self.parse_statement()? {
                     return Ok(Some(Statement::Static(Static::new(visibility, stmt))));
                 } else {
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        format!("A statement was expected here."),
                         format!("Expected a statement after a static keyword, but found none."),
-                        format!("A statement was expected here.")
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             } else {
                 return Ok(None);
@@ -301,12 +283,13 @@ impl AstGenerator {
                     stmt,
                 ))));
             } else {
-                create_report!(
-                    self.context,
-                    self.tokens.first().unwrap().range(),
+                return Err(ParserError::new(
+                    format!("A statement was expected here."),
                     format!("Expected a statement after a static keyword, but found none."),
-                    format!("A statement was expected here.")
-                );
+                    self.tokens.first().unwrap().range(),
+                    self.body.clone(),
+                    None,
+                ));
             }
         } else {
             return Ok(None);
@@ -332,7 +315,7 @@ impl AstGenerator {
 
         if let Some(keyword) = decl_keyword {
             let is_constant = keyword.kind().as_keyword() == KeyWord::Const;
-            self.skip_whitespace_err("A variable name was expected but none was found.");
+            self.skip_whitespace_err("A variable name was expected but none was found.")?;
 
             // check if the next token is an indentifier
             if let Some(identifier) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
@@ -347,19 +330,20 @@ impl AstGenerator {
                     if let Some(type_smt) = self.parse_type_kind()? {
                         type_node = Some(type_smt);
                     } else {
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
+                        return Err(ParserError::new(
+                            "A type statement is expected here.".to_string(),
                             "Expected type statement to follow a variable declaration with a colon.".to_string(),
-                            "A type statement is expected here.".to_string()
-                        );
+                            self.tokens.first().unwrap().range(),
+                            self.body.clone(),
+                            None
+                        ));
                     }
                 } else {
                     type_node = None;
                 }
 
                 // we now need an assignment operator
-                self.skip_whitespace_err("An operator was expected but none was found.");
+                self.skip_whitespace_err("An operator was expected but none was found.")?;
 
                 // check for an "equals" operator
                 if let Some(_) = self
@@ -368,11 +352,11 @@ impl AstGenerator {
                 {
                     // we have an equals operator!
                     // we need to parse an expression
-                    self.skip_whitespace_err("An expression was expected but none was found.");
+                    self.skip_whitespace_err("An expression was expected but none was found.")?;
                     if let Some(expr) = self.parse_expression()? {
                         // we have an expression!
                         // we need to parse a semicolon
-                        self.skip_whitespace_err("A semicolon was expected but none was found.");
+                        self.skip_whitespace_err("A semicolon was expected but none was found.")?;
                         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
                             return Ok(Some((
                                 Variable::new(
@@ -384,21 +368,23 @@ impl AstGenerator {
                                 is_constant,
                             )));
                         } else {
-                            create_report!(
-                                self.context,
-                                self.tokens.first().unwrap().range(),
+                            return Err(ParserError::new(
+                                "A semicolon is expected here.".to_string(),
                                 "Expected a semicolon to follow a variable declaration."
                                     .to_string(),
-                                "A semicolon is expected here.".to_string()
-                            );
+                                self.tokens.first().unwrap().range(),
+                                self.body.clone(),
+                                None,
+                            ));
                         }
                     } else {
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
+                        return Err(ParserError::new(
+                            "An expression is expected here.".to_string(),
                             "Expected an expression to follow a variable declaration.".to_string(),
-                            "An expression is expected here.".to_string()
-                        );
+                            self.tokens.first().unwrap().range(),
+                            self.body.clone(),
+                            None,
+                        ));
                     }
                 } else {
                     // variables **can** be uninitialized
@@ -413,25 +399,27 @@ impl AstGenerator {
                     } else {
                         // we don't have an end of statement!
                         // we need to report an error
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
+                        return Err(ParserError::new(
+                            "A semi-colon is expected here.".to_string(),
                             "Expected an end of statement to follow an uninitialized declaration."
                                 .to_string(),
-                            "A semi-colon is expected here.".to_string()
-                        );
+                            self.tokens.first().unwrap().range(),
+                            self.body.clone(),
+                            None,
+                        ));
                     }
                 }
             } else {
-                create_report!(
-                    self.context,
-                    self.tokens.first().unwrap().range(),
-                    "A name must follow a variable declaration".to_string(),
+                return Err(ParserError::new(
                     format!(
                         "Unexpected token: \"{}\"",
                         self.tokens.first().unwrap().kind().to_string()
-                    )
-                );
+                    ),
+                    "A name must follow a variable declaration".to_string(),
+                    self.tokens.first().unwrap().range(),
+                    self.body.clone(),
+                    None,
+                ));
             }
         } else {
             return Ok(None);
@@ -451,7 +439,7 @@ impl AstGenerator {
         {
             let _ = self.parse_visibility()?.unwrap_or(Visibility::Private);
             let mut name: Option<String> = None;
-            self.skip_whitespace_err("A function input list was expected but none was found.");
+            self.skip_whitespace_err("A function input list was expected but none was found.")?;
             if let Some(n) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                 // we have a function name.
                 // we need to parse the input list
@@ -459,10 +447,10 @@ impl AstGenerator {
             }
 
             // we need to parse the input list
-            self.skip_whitespace_err("A function input list was expected but none was found.");
+            self.skip_whitespace_err("A function input list was expected but none was found.")?;
             if let Some((inputs, outputs)) = self.parse_function_inputs()? {
                 // we need a block now.
-                self.skip_whitespace_err("A block was expected but none was found.");
+                self.skip_whitespace_err("A block was expected but none was found.")?;
                 if let Some(block) = self.parse_block()? {
                     return Ok(Some(Function {
                         name,
@@ -473,20 +461,22 @@ impl AstGenerator {
                         node_id: 0,
                     }));
                 } else {
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "A block is expected here.".to_string(),
                         "Expected a block to follow a function declaration.".to_string(),
-                        "A block is expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             } else {
-                create_report!(
-                    self.context,
-                    self.tokens.first().unwrap().range(),
+                return Err(ParserError::new(
+                    "A function input list is expected here.".to_string(),
                     "Expected a function input list to follow a function declaration.".to_string(),
-                    "A function input list is expected here.".to_string()
-                );
+                    self.tokens.first().unwrap().range(),
+                    self.body.clone(),
+                    None,
+                ));
             }
         }
         return Ok(None);
@@ -498,7 +488,7 @@ impl AstGenerator {
         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_left_parenthesis()) {
             let mut inputs: Vec<FunctionInput> = Vec::new();
             while !self.tokens.is_eof() {
-                self.skip_whitespace_err("Function declaration arguments must be closed.");
+                self.skip_whitespace_err("Function declaration arguments must be closed.")?;
                 if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_parenthesis()) {
                     // we can't actually return here because we still need to parse the function body
                     // as well as the return type
@@ -509,14 +499,14 @@ impl AstGenerator {
                     // the type checking and just parse the variable
                     self.skip_whitespace_err(
                         "Expected a type statement after a function argument declaration.",
-                    );
+                    )?;
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
                         // now parse a type statement.
                         self.skip_whitespace();
                         if let Some(type_smt) = self.parse_type_kind()? {
                             // we have a type!
                             // we need to parse a comma
-                            self.skip_whitespace_err("A comma was expected but none was found.");
+                            self.skip_whitespace_err("A comma was expected but none was found.")?;
                             if let Some(_) = self.tokens.peek_if(|t| t.kind().is_comma()) {
                                 // we have a comma!
                                 // we need to parse another argument
@@ -538,38 +528,42 @@ impl AstGenerator {
                                 } else {
                                     // we don't have a right parenthesis!
                                     // we need to report an error
-                                    create_report!(
-                                        self.context,
-                                        self.tokens.first().unwrap().range(),
+                                    return Err(ParserError::new(
+                                        "A right parenthesis is expected here.".to_string(),
                                         "Expected a right parenthesis to follow a function argument declaration.".to_string(),
-                                        "A right parenthesis is expected here.".to_string()
-                                    );
+                                        self.tokens.first().unwrap().range(),
+                                        self.body.clone(),
+                                        None
+                                    ));
                                 }
                             }
                         } else {
-                            create_report!(
-                                self.context,
-                                self.tokens.first().unwrap().range(),
+                            return Err(ParserError::new(
+                                "A type statement is expected here.".to_string(),
                                 "Expected a type statement to follow a function declaration argument.".to_string(),
-                                "A type statement is expected here.".to_string()
-                            );
+                                self.tokens.first().unwrap().range(),
+                                self.body.clone(),
+                                None
+                            ));
                         }
                     } else {
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
+                        return Err(ParserError::new(
+                            "A type statement is expected here.".to_string(),
                             "Expected a type statement to follow a function declaration argument."
                                 .to_string(),
-                            "A type statement is expected here.".to_string()
-                        );
+                            self.tokens.first().unwrap().range(),
+                            self.body.clone(),
+                            None,
+                        ));
                     }
                 } else {
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "A name is expected here.".to_string(),
                         "Expected a function parameter name but none was found.".to_string(),
-                        "A name is expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             }
 
@@ -581,17 +575,18 @@ impl AstGenerator {
                 // we need to parse a type statement
                 self.skip_whitespace_err(
                     "Expected a return type statement after a function declaration.",
-                );
+                )?;
                 if let Some(type_smt) = self.parse_type_kind()? {
                     returns = Some(type_smt);
                 } else {
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
                         "Expected a return type statement to follow a function declaration."
                             .to_string(),
-                        "A return type is expected here.".to_string()
-                    );
+                        "A return type is expected here.".to_string(),
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             }
 
@@ -618,18 +613,19 @@ impl AstGenerator {
                     extends,
                     implements,
                     body: body.unwrap_or(ClassBody::new()),
-                    node_id: self.context.get_next_local_id(),
+                    node_id: self.context.clone().get_next_local_id(),
                 }));
             } else {
-                create_report!(
-                    self.context,
-                    self.tokens.first().unwrap().range(),
-                    "Expected a class name but none was found.".to_string(),
+                return Err(ParserError::new(
                     format!(
                         "Unexpected token: {}",
                         self.tokens.first().unwrap().kind().to_string()
-                    )
-                );
+                    ),
+                    "Expected a class name but none was found.".to_string(),
+                    self.tokens.first().unwrap().range(),
+                    self.body.clone(),
+                    None,
+                ));
             }
         } else {
             return Ok(None);
@@ -645,15 +641,16 @@ impl AstGenerator {
             if let Some(path) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                 return Ok(Some(path.value().unwrap()));
             } else {
-                create_report!(
-                    self.context,
-                    self.tokens.first().unwrap().range(),
-                    "Expected a class name to extend but none was found.".to_string(),
+                return Err(ParserError::new(
                     format!(
                         "Unexpected token: {}",
                         self.tokens.first().unwrap().kind().to_string()
-                    )
-                );
+                    ),
+                    "Expected a class name to extend but none was found.".to_string(),
+                    self.tokens.first().unwrap().range(),
+                    self.body.clone(),
+                    None,
+                ));
             }
         }
         return Ok(None);
@@ -674,15 +671,16 @@ impl AstGenerator {
                         if let Some(path) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                             paths.push(path.value().unwrap());
                         } else {
-                            create_report!(
-                                self.context,
-                                self.tokens.first().unwrap().range(),
-                                "Expected a class name to extend but none was found.".to_string(),
+                            return Err(ParserError::new(
                                 format!(
                                     "Unexpected token: {}",
                                     self.tokens.first().unwrap().kind().to_string()
-                                )
-                            );
+                                ),
+                                "Expected a class name to extend but none was found.".to_string(),
+                                self.tokens.first().unwrap().range(),
+                                self.body.clone(),
+                                None,
+                            ));
                         }
                     } else {
                         break;
@@ -692,27 +690,29 @@ impl AstGenerator {
                 if !self.tokens.is_eof() {
                     return Ok(Some(paths));
                 } else {
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
-                        "Expected a class name or interface to implement but none was found."
-                            .to_string(),
+                    return Err(ParserError::new(
                         format!(
                             "Unexpected token: {}",
                             self.tokens.first().unwrap().kind().to_string()
-                        )
-                    );
+                        ),
+                        "Expected a class name or interface to implement but none was found."
+                            .to_string(),
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             } else {
-                create_report!(
-                    self.context,
-                    self.tokens.first().unwrap().range(),
+                return Err(ParserError::new(
                     "Expected a class name to implement but none was found.".to_string(),
                     format!(
                         "Unexpected token: {}",
                         self.tokens.first().unwrap().kind().to_string()
-                    )
-                );
+                    ),
+                    self.tokens.first().unwrap().range(),
+                    self.body.clone(),
+                    None,
+                ));
             }
         }
         return Ok(None);
@@ -733,12 +733,13 @@ impl AstGenerator {
                 if let Some(kind) = self.parse_type_kind()? {
                     type_node = Some(kind);
                 } else {
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "A type statement is expected here.".to_string(),
                         "Expected a type statement to follow a property declaration.".to_string(),
-                        "A type statement is expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             }
 
@@ -749,11 +750,11 @@ impl AstGenerator {
             {
                 // we have an equals operator!
                 // we need to parse an expression
-                self.skip_whitespace_err("An expression was expected but none was found.");
+                self.skip_whitespace_err("An expression was expected but none was found.")?;
                 if let Some(expr) = self.parse_expression()? {
                     // we have an expression!
                     // we need to parse a semicolon
-                    self.skip_whitespace_err("A semicolon was expected but none was found.");
+                    self.skip_whitespace_err("A semicolon was expected but none was found.")?;
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_statement_end()) {
                         return Ok(Some(ClassProperty::new(
                             name.value().unwrap(),
@@ -762,20 +763,22 @@ impl AstGenerator {
                             Some(expr),
                         )));
                     } else {
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
+                        return Err(ParserError::new(
                             "Expected a semicolon to follow a variable declaration.".to_string(),
-                            "A semicolon is expected here.".to_string()
-                        );
+                            "A semicolon is expected here.".to_string(),
+                            self.tokens.first().unwrap().range(),
+                            self.body.clone(),
+                            None,
+                        ));
                     }
                 } else {
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "An expression is expected here.".to_string(),
                         "Expected an expression to follow a variable declaration.".to_string(),
-                        "An expression is expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             } else {
                 // variables **can** be uninitialized
@@ -792,13 +795,14 @@ impl AstGenerator {
                 } else {
                     // we don't have an end of statement!
                     // we need to report an error
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "A semi-colon is expected here.".to_string(),
                         "Expected an end of statement to follow an uninitialized declaration."
                             .to_string(),
-                        "A semi-colon is expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             }
         }
@@ -826,35 +830,37 @@ impl AstGenerator {
                     ClassAllowedStatement::Method(func),
                 )));
             } else {
-                create_report!(
-                    self.context,
-                    self.tokens.first().unwrap().range(),
-                    "Expected a property or function declaration but none was found.".to_string(),
+                return Err(ParserError::new(
                     format!(
                         "Unexpected token: {}",
                         self.tokens.first().unwrap().kind().to_string()
-                    )
-                );
+                    ),
+                    "Expected a property or function declaration but none was found.".to_string(),
+                    self.tokens.first().unwrap().range(),
+                    self.body.clone(),
+                    None,
+                ));
             }
         } else {
             // the statement is not static
             // Parse a property
-            self.skip_whitespace_err("Expected a class statement but none was found.");
+            self.skip_whitespace_err("Expected a class statement but none was found.")?;
             if let Some(property) = self.parse_class_property(visibility.clone())? {
                 return Ok(Some(ClassAllowedStatement::Property(property)));
             } else if let Some(mut func) = self.parse_function()? {
                 func.visibility = visibility;
                 return Ok(Some(ClassAllowedStatement::Method(func)));
             } else {
-                create_report!(
-                    self.context,
-                    self.tokens.first().unwrap().range(),
+                return Err(ParserError::new(
                     "Expected a property or function declaration but none was found.".to_string(),
                     format!(
                         "Unexpected token: {}",
                         self.tokens.first().unwrap().kind().to_string()
-                    )
-                );
+                    ),
+                    self.tokens.first().unwrap().range(),
+                    self.body.clone(),
+                    None,
+                ));
             }
         }
     }
@@ -872,7 +878,7 @@ impl AstGenerator {
             {
                 self.skip_whitespace_err(
                     "Expected a right brace to close the class body, found none.",
-                );
+                )?;
                 if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_brace()) {
                     break;
                 } else if let Some(property) = self.parse_class_property(Visibility::Private)? {
@@ -882,15 +888,16 @@ impl AstGenerator {
                 } else if let Some(other) = self.parse_class_allowed_statement()? {
                     body.other.push(other);
                 } else {
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
-                        "Classes must contain a property, method, import or macro.".to_string(),
+                    return Err(ParserError::new(
                         format!(
                             "Unexpected token: \"{}\" inside class body.",
                             self.tokens.first().unwrap().kind().to_string()
-                        )
-                    );
+                        ),
+                        "Classes must contain a property, method, import or macro.".to_string(),
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             }
 
@@ -910,7 +917,7 @@ impl AstGenerator {
             // we need to parse the statements inside the block
             let mut expressions: Vec<Expression> = Vec::new();
             while !self.tokens.is_eof() {
-                self.skip_whitespace_err("Expected a statement to follow a block.");
+                self.skip_whitespace_err("Expected a statement to follow a block.")?;
                 if let Some(expr) = self.parse_expression()? {
                     expressions.push(expr);
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_brace()) {
@@ -936,21 +943,22 @@ impl AstGenerator {
                         // have the context of the block.
                         continue;
                     } else {
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
+                        return Err(ParserError::new(
+                            "Expected an expression here.".to_string(),
                             "Expected an expression to follow a return statement.".to_string(),
-                            "Expected an expression here.".to_string()
-                        );
+                            self.tokens.first().unwrap().range(),
+                            self.body.clone(),
+                            None,
+                        ));
                     }
                 } else {
-                    println!("{:?}", self.tokens.first().unwrap());
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "A statement is expected here.".to_string(),
                         "Expected a statement to follow a block.".to_string(),
-                        "A statement is expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             }
             return Ok(Some(expressions));
@@ -971,7 +979,7 @@ impl AstGenerator {
         {
             let visibility = Visibility::from_keyword(modifier.kind().as_keyword());
 
-            self.skip_whitespace_err("A statement or static keyword was expected after a visibility modifier but none was found.");
+            self.skip_whitespace_err("A statement or static keyword was expected after a visibility modifier but none was found.")?;
 
             return Ok(Some(visibility));
         } else {
@@ -1013,7 +1021,7 @@ impl AstGenerator {
                 while !self.tokens.is_eof() {
                     // we need to recursively parse in a union type, this can be exhausting!
                     // because of this, we will only be parsing type references here.
-                    self.skip_whitespace_err("Expected a type reference to follow a union type.");
+                    self.skip_whitespace_err("Expected a type reference to follow a union type.")?;
                     if let Some(_) = self
                         .tokens
                         .peek_if(|t| t.kind().is_operator() && t.value().unwrap().as_str() == "|")
@@ -1021,7 +1029,7 @@ impl AstGenerator {
                         // we have another pipe, meaning another type to the type union, lets parse the next token.
                         self.skip_whitespace_err(
                             "Expected a type reference to follow a union type.",
-                        );
+                        )?;
                         if let Some(name) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                             // we have a type reference!
                             union_type
@@ -1031,12 +1039,13 @@ impl AstGenerator {
                                     self.parse_type_generics()?,
                                 )));
                         } else {
-                            create_report!(
-                                self.context,
-                                self.tokens.first().unwrap().range(),
+                            return Err(ParserError::new(
+                                "A type reference is expected here.".to_string(),
                                 "Expected a type reference to follow a union type.".to_string(),
-                                "A type reference is expected here.".to_string()
-                            );
+                                self.tokens.first().unwrap().range(),
+                                self.body.clone(),
+                                None,
+                            ));
                         }
                     } else if let Some(_) =
                         self.tokens.first_if(|t| t.value().unwrap().as_str() == "=")
@@ -1044,12 +1053,13 @@ impl AstGenerator {
                         // we have an equals sign, meaning this union is completed.
                         break;
                     } else {
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
+                        return Err(ParserError::new(
+                            "A type reference is expected here.".to_string(),
                             "Expected a type reference to follow a union type.".to_string(),
-                            "A type reference is expected here.".to_string()
-                        );
+                            self.tokens.first().unwrap().range(),
+                            self.body.clone(),
+                            None,
+                        ));
                     }
                 }
 
@@ -1086,7 +1096,7 @@ impl AstGenerator {
             while !self.tokens.is_eof() {
                 self.skip_whitespace_err(
                     "Expected a type paramater to follow a typed parameter list.",
-                );
+                )?;
                 if let Some(kind) = self.parse_type_kind()? {
                     generics.push(TypeParam::new(kind));
                 } else if let Some(_) = self
@@ -1095,25 +1105,27 @@ impl AstGenerator {
                 {
                     // check if the generics list is empty, if so throw an error
                     if generics.is_empty() {
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
+                        return Err(ParserError::new(
+                            "A type paramater is expected here.".to_string(),
                             "Expected a type paramater to follow a typed parameter list."
                                 .to_string(),
-                            "A type paramater is expected here.".to_string()
-                        );
+                            self.tokens.first().unwrap().range(),
+                            self.body.clone(),
+                            None,
+                        ));
                     } else {
                         return Ok(Some(generics));
                     }
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_comma()) {
                     continue;
                 } else {
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "A type paramater is expected here.".to_string(),
                         "Expected a type paramater to follow a typed parameter list.".to_string(),
-                        "A type paramater is expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             }
         }
@@ -1180,20 +1192,22 @@ impl AstGenerator {
                         let instruction = Operation::new(left, op, right);
                         return Ok(Some(Expression::Operation(instruction)));
                     } else {
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
+                        return Err(ParserError::new(
+                            "An expression is expected here.".to_string(),
                             "Expected an expression to follow an operation.".to_string(),
-                            "An expression is expected here.".to_string()
-                        );
+                            self.tokens.first().unwrap().range(),
+                            self.body.clone(),
+                            None,
+                        ));
                     }
                 } else {
-                    create_report!(
-                        self.context,
-                        ops.range(),
+                    return Err(ParserError::new(
                         "Unknown operator: {}".to_string(),
-                        ops.value().unwrap()
-                    );
+                        ops.value().unwrap(),
+                        ops.range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             } else {
                 return Ok(Some(left));
@@ -1246,12 +1260,13 @@ impl AstGenerator {
                     )));
                 } else {
                     // we don't have a member expression, we need to report an error
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "An expression was expected here.".to_string(),
                         "Expected an expression to follow a property member.".to_string(),
-                        "An expression was expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             } else {
                 // we don't have a period, this is probably not a member expression
@@ -1280,21 +1295,23 @@ impl AstGenerator {
                     return Ok(Some(NewCall::new(name.value().unwrap(), args)));
                 } else {
                     // we don't have a function call inputs, we need to report an error.
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "Function inputs expected here.".to_string(),
                         "Expected a function call inputs to follow a new expression.".to_string(),
-                        "Function inputs expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             } else {
                 // we don't have a name, we need to report an error.
-                create_report!(
-                    self.context,
-                    self.tokens.second().unwrap().range(),
+                return Err(ParserError::new(
+                    "A name was expected here.".to_string(),
                     "Expected a name to follow a new expression.".to_string(),
-                    "A name was expected here.".to_string()
-                );
+                    self.tokens.second().unwrap().range(),
+                    self.body.clone(),
+                    None,
+                ));
             }
         }
         return Ok(None);
@@ -1305,27 +1322,28 @@ impl AstGenerator {
             // inside array
             let mut elements: Vec<Expression> = Vec::new();
             while !self.tokens.is_eof() {
-                self.skip_whitespace_err("Array's must be closed.");
+                self.skip_whitespace_err("Array's must be closed.")?;
                 if let Some(element) = self.parse_expression()? {
                     // we have an expression, we need to parse a comma
-                    self.skip_whitespace_err("Array's must be closed.");
+                    self.skip_whitespace_err("Array's must be closed.")?;
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_comma()) {
                         elements.push(element);
                     } else {
                         // ok, check if the next token is a right bracket, if so, we're done.
                         // otherwise error
-                        self.skip_whitespace_err("Array's must be closed.");
+                        self.skip_whitespace_err("Array's must be closed.")?;
                         if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_bracket()) {
                             // we have a right bracket, we can return the inputs
                             elements.push(element);
                             return Ok(Some(Array::new(elements, None)));
                         } else {
-                            create_report!(
-                                self.context,
-                                self.tokens.first().unwrap().range(),
+                            return Err(ParserError::new(
+                                "A comma is expected here.".to_string(),
                                 "A comma is required to seperate array elements.".to_string(),
-                                "A comma is expected here.".to_string()
-                            );
+                                self.tokens.first().unwrap().range(),
+                                self.body.clone(),
+                                None,
+                            ));
                         }
                     }
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_bracket()) {
@@ -1333,15 +1351,16 @@ impl AstGenerator {
                     return Ok(Some(Array::new(elements, None)));
                 } else {
                     // we don't have an expression, we need to report an error.
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
-                        "Expected an expression to follow an array element.".to_string(),
+                    return Err(ParserError::new(
                         format!(
                             "Unexpected Token: {}",
                             self.tokens.first().unwrap().kind().to_string()
-                        )
-                    );
+                        ),
+                        "Expected an expression to follow an array element.".to_string(),
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             }
         }
@@ -1355,12 +1374,12 @@ impl AstGenerator {
 
             while !self.tokens.is_eof() {
                 // purge whitespace.
-                self.skip_whitespace_err("Object body must be closed.");
+                self.skip_whitespace_err("Object body must be closed.")?;
                 if let Some(property) = self.tokens.peek_if(|t| t.kind().is_identifier()) {
                     // the property name was found, now we need to parse a colon.
                     if let Some(_) = self.tokens.peek_if(|t| t.kind().is_colon()) {
                         // we have a colon, we need to parse an expression.
-                        self.skip_whitespace_err("Object body must be closed.");
+                        self.skip_whitespace_err("Object body must be closed.")?;
                         if let Some(expression) = self.parse_expression()? {
                             // we have an expression, we need to add the property to the object.
                             let prop = ObjectProperty::new(property.value().unwrap(), expression);
@@ -1372,7 +1391,7 @@ impl AstGenerator {
                                 object.properties.push(prop);
                             } else {
                                 // check for a right brace, if so, we're done.
-                                self.skip_whitespace_err("Object body must be closed.");
+                                self.skip_whitespace_err("Object body must be closed.")?;
                                 if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_brace())
                                 {
                                     // we have a right brace, we're done.
@@ -1380,47 +1399,51 @@ impl AstGenerator {
                                     return Ok(Some(object));
                                 } else {
                                     // we don't have a right brace, we need to report an error.
-                                    create_report!(
-                                        self.context,
-                                        self.tokens.first().unwrap().range(),
+                                    return Err(ParserError::new(
+                                        "A right brace was expected here.".to_string(),
                                         "Expected a right brace to close an object body."
                                             .to_string(),
-                                        "A right brace was expected here.".to_string()
-                                    );
+                                        self.tokens.first().unwrap().range(),
+                                        self.body.clone(),
+                                        None,
+                                    ));
                                 }
                             }
                         } else {
                             // we don't have an expression, we need to report an error.
-                            create_report!(
-                                self.context,
-                                self.tokens.first().unwrap().range(),
+                            return Err(ParserError::new(
+                                "An expression was expected here.".to_string(),
                                 "Expected an expression to follow a property.".to_string(),
-                                "An expression was expected here.".to_string()
-                            );
+                                self.tokens.first().unwrap().range(),
+                                self.body.clone(),
+                                None,
+                            ));
                         }
                     } else {
                         // we don't have a colon, we need to report an error.
-                        create_report!(
-                            self.context,
-                            self.tokens.first().unwrap().range(),
-                            "Expected a colon to follow a property name.".to_string(),
+                        return Err(ParserError::new(
                             format!(
                                 "Unexpected Token: {}",
                                 self.tokens.first().unwrap().kind().to_string()
-                            )
-                        );
+                            ),
+                            "Expected a colon to follow a property name.".to_string(),
+                            self.tokens.first().unwrap().range(),
+                            self.body.clone(),
+                            None,
+                        ));
                     }
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_brace()) {
                     // end of object
                     return Ok(Some(object));
                 } else {
                     // we don't have an object property, we need to report an error.
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "An object property was expected here.".to_string(),
                         "Expected an object property to follow an object element.".to_string(),
-                        "An object property was expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             }
         }
@@ -1455,7 +1478,7 @@ impl AstGenerator {
             let mut inputs: Vec<Expression> = Vec::new();
             while !self.tokens.is_eof() {
                 // we need to parse an expression
-                self.skip_whitespace_err("Function arguments must be closed.");
+                self.skip_whitespace_err("Function arguments must be closed.")?;
 
                 if let Some(expr) = self.parse_expression()? {
                     // we have an expression, we need to parse a comma
@@ -1469,12 +1492,13 @@ impl AstGenerator {
                             inputs.push(expr);
                             return Ok(Some(inputs));
                         } else {
-                            create_report!(
-                                self.context,
-                                self.tokens.first().unwrap().range(),
+                            return Err(ParserError::new(
+                                "A comma is expected here.".to_string(),
                                 "Expected a comma to follow a function input.".to_string(),
-                                "A comma is expected here.".to_string()
-                            );
+                                self.tokens.first().unwrap().range(),
+                                self.body.clone(),
+                                None,
+                            ));
                         }
                     }
                 } else if let Some(_) = self.tokens.peek_if(|t| t.kind().is_right_parenthesis()) {
@@ -1482,40 +1506,44 @@ impl AstGenerator {
                     return Ok(Some(inputs));
                 } else {
                     // we don't have an expression, we need to report an error
-                    create_report!(
-                        self.context,
-                        self.tokens.first().unwrap().range(),
+                    return Err(ParserError::new(
+                        "An expression is expected here.".to_string(),
                         "Expected an expression to follow a function input.".to_string(),
-                        "An expression is expected here.".to_string()
-                    );
+                        self.tokens.first().unwrap().range(),
+                        self.body.clone(),
+                        None,
+                    ));
                 }
             }
 
-            create_report!(
-                self.context,
-                self.tokens.first().unwrap().range(),
+            return Err(ParserError::new(
+                "An expression is expected here.".to_string(),
                 "Expected an expression to follow a function input.".to_string(),
-                "An expression is expected here.".to_string()
-            );
+                self.tokens.first().unwrap().range(),
+                self.body.clone(),
+                None,
+            ));
         }
 
         return Ok(None);
     }
 
-    fn skip_whitespace_err(&mut self, err: &'static str) {
+    fn skip_whitespace_err(&mut self, err: &'static str) -> Result<(), ParserError> {
         let start = self.tokens.first().expect(err).range().start;
         match self
             .tokens
             .peek_until(|t| !t.kind().is_whitespace() && !t.kind().is_comment())
         {
             None => {
-                create_report!(
-                    self.context,
-                    start..self.context.source.get_contents().unwrap().len(),
-                    err.to_string()
-                );
+                return Err(ParserError::new(
+                    err.to_string(),
+                    format!("Whitespace terminated the code while parsing an expression or statement. Make sure you're closing your code blocks and shit :)"),
+                    start..self.context.clone().source.get_contents().unwrap().len(),
+                    self.body.clone(),
+                    None,
+                ));
             }
-            _ => (),
+            _ => Ok(()),
         }
     }
 

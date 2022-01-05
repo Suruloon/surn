@@ -1,4 +1,4 @@
-namespace Test {
+namespace Test\ {
     // These variables are not public.
     // To export them, you muse use `pub` keyword.
     var x = function_call(10, x);

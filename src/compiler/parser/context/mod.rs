@@ -162,6 +162,10 @@ impl ContextStore {
         self.contexts.insert(self.id, context.clone());
     }
 
+    pub fn remove_context(&mut self, id: u64) {
+        self.contexts.remove(&id);
+    }
+
     pub fn new_context(&mut self, source: SourceOrigin) -> &Context {
         self.id += 1;
         self.contexts.insert(self.id, Context::new(source, self.id));

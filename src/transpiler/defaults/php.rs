@@ -27,7 +27,7 @@ pub struct PhpGenerator {
 impl PhpGenerator {
     pub fn new(body: AstBody) -> Self {
         PhpGenerator {
-            formatting: FormatOptions::PSR_4(),
+            formatting: FormatOptions::psr_4(),
         }
     }
 
@@ -37,7 +37,6 @@ impl PhpGenerator {
         match kind {
             NodeKind::Expression(expr) => self.process_expression(expr),
             NodeKind::Statement(stmt) => self.process_statement(stmt),
-            _ => "".to_string(),
         }
     }
 

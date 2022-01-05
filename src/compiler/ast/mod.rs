@@ -789,7 +789,7 @@ pub struct CompilerMacro {
 #[derive(Debug, Clone)]
 pub struct AstBody {
     // todo: Compiler flags
-    flags: u64,
+    pub flags: u64,
     program: Vec<Node>,
 }
 
