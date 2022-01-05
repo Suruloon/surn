@@ -1,2 +1,7 @@
 target/
 .vscode/
+.idea/
+
+# ignore test data.
+*.ast
+test.php
