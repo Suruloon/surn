@@ -4,7 +4,7 @@
      </p>
      <p>
           <p>
-            A powerful transpiler enabling you to write in one syntax, many languages.
+            A powerful transpiler enabling you to write in one syntax, many languages, single form.
             </p>
      </p>
 </div>
@@ -20,19 +20,15 @@ Surn is a powerful [source-to-source compiler](https://en.wikipedia.org/wiki/Sou
 | PHP 8.x.x | `v0.0.1-alpha.rc.1`  | [master]() |
 | C         | `v0.0.1-beta.rfc.12` |            |
 
-
-
-
-
 ### How to support a language?
 
-Surn uses a poly filling language known as "sast".
+Surn uses a poly filling language known as "smtt", pronounced "smitt". SMTT stands for Surn Mapped Token Tree. The syntax of smtt is very unique in that it is extermely limited.
 
 
+
+You can view the specifications of [SMTT by clicking here.](/docs/smtt/README.md)
 
 Here's an example that compiles the following code to JS.
-
-
 
 The **surn** code:
 
@@ -49,11 +45,13 @@ pub fn main() {
 
 The `js.sast` file:
 
-```js
+```c
+format
+
 translate VarStatement(var @> name, assignment):
     name = var.name
     right = var.assignment?
-    
+
     return:
         // Anything below a return block with proper indentation is translated
         let $name = $assignment;
@@ -84,8 +82,6 @@ support [std.io] print((v is Any)):
         function print(v) {
             console.log(v);
         }
-
-
 ```
 
 Translates to:
