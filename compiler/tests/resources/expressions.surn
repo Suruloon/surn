@@ -1,6 +1,6 @@
 namespace Test {
     // These variables are not public.
-    // To export them, you muse use `pub` keyword.
+    // To export them, you must use `pub` keyword.
     var x = function_call(10, x);
     var apple = {
         test: 10
